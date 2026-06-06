@@ -3,6 +3,8 @@ import { LayerStack } from "@/components/LayerStack";
 import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
 import { OsiTcpIpMap } from "@/components/OsiTcpIpMap";
 import { OsiStackArt } from "@/components/diagrams/OsiStackArt";
+import { Annotate } from "@/components/content/Annotate";
+import { Reveal } from "@/components/Reveal";
 
 export default function Home() {
   return (
@@ -54,54 +56,69 @@ export default function Home() {
         <h2 className="sr-only">The seven layers</h2>
         <LayerStack />
         <p className="mt-4 text-center text-sm" style={{ color: "var(--fg-muted)" }}>
-          Hover a layer for its essence; click to dive in. Data is <strong>encapsulated</strong> on
-          the way down the sender&rsquo;s stack and <strong>de-encapsulated</strong> on the way up
-          the receiver&rsquo;s.
+          Hover a layer for its essence; click to dive in. Data is{" "}
+          <Annotate type="underline" color="green">
+            encapsulated
+          </Annotate>{" "}
+          on the way down the sender&rsquo;s stack and{" "}
+          <Annotate type="underline" color="violet">
+            de-encapsulated
+          </Annotate>{" "}
+          on the way up the receiver&rsquo;s.
         </p>
       </section>
 
       {/* Encapsulation visualizer */}
-      <section className="mt-16">
-        <h2 className="font-serif text-2xl font-semibold">How data travels: encapsulation</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ color: "var(--fg-muted)" }}>
-          As data descends the sender&rsquo;s stack, each layer wraps it in a header. Step through
-          the assembly of a frame from raw application data down to bits on the wire.
-        </p>
-        <div className="mt-5">
-          <EncapsulationVisualizer />
-        </div>
-      </section>
+      <Reveal className="mt-16">
+        <section>
+          <h2 className="font-serif text-2xl font-semibold">How data travels: encapsulation</h2>
+          <p
+            className="mt-2 max-w-2xl text-sm leading-relaxed"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            As data descends the sender&rsquo;s stack, each layer wraps it in a header. Step through
+            the assembly of a frame from raw application data down to bits on the wire.
+          </p>
+          <div className="mt-5">
+            <EncapsulationVisualizer />
+          </div>
+        </section>
+      </Reveal>
 
       {/* OSI vs TCP/IP */}
-      <section className="mt-16 grid items-center gap-8 sm:grid-cols-2">
-        <div>
-          <h2 className="font-serif text-2xl font-semibold">Theory vs. the real internet</h2>
-          <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--fg-muted)" }}>
-            The OSI model is the teaching framework, but the internet actually runs on the leaner{" "}
-            <strong>TCP/IP model</strong>, which collapses seven layers into four. OSI&rsquo;s top
-            three layers (Application, Presentation, Session) map to a single TCP/IP Application
-            layer; its bottom two fold into the Link layer. Learn OSI for the concepts, recognize
-            TCP/IP in practice.
-          </p>
-        </div>
-        <OsiTcpIpMap />
-      </section>
+      <Reveal>
+        <section className="mt-16 grid items-center gap-8 sm:grid-cols-2">
+          <div>
+            <h2 className="font-serif text-2xl font-semibold">Theory vs. the real internet</h2>
+            <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+              The OSI model is the teaching framework, but the internet actually runs on the leaner{" "}
+              <strong>TCP/IP model</strong>, which collapses seven layers into four. OSI&rsquo;s top
+              three layers (Application, Presentation, Session) map to a single TCP/IP Application
+              layer; its bottom two fold into the Link layer. Learn OSI for the concepts, recognize
+              TCP/IP in practice.
+            </p>
+          </div>
+          <OsiTcpIpMap />
+        </section>
+      </Reveal>
 
       {/* How to use */}
-      <section className="mt-16 grid gap-6 sm:grid-cols-3">
-        <FeatureCard title="Mnemonic">
-          <em>Please Do Not Throw Sausage Pizza Away</em> — Physical, Data Link, Network, Transport,
-          Session, Presentation, Application (1→7).
-        </FeatureCard>
-        <FeatureCard title="OSI vs. TCP/IP">
-          The internet runs on the leaner TCP/IP model. We map the two so you learn the theory and
-          the reality.
-        </FeatureCard>
-        <FeatureCard title="Cited & verifiable">
-          Header layouts and protocol claims reference their RFCs and standards so you can check the
-          primary sources.
-        </FeatureCard>
-      </section>
+      <Reveal className="mt-16">
+        <section className="grid gap-6 sm:grid-cols-3">
+          <FeatureCard title="Mnemonic">
+            <em>Please Do Not Throw Sausage Pizza Away</em> — Physical, Data Link, Network,
+            Transport, Session, Presentation, Application (1→7).
+          </FeatureCard>
+          <FeatureCard title="OSI vs. TCP/IP">
+            The internet runs on the leaner TCP/IP model. We map the two so you learn the theory and
+            the reality.
+          </FeatureCard>
+          <FeatureCard title="Cited & verifiable">
+            Header layouts and protocol claims reference their RFCs and standards so you can check
+            the primary sources.
+          </FeatureCard>
+        </section>
+      </Reveal>
     </main>
   );
 }

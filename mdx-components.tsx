@@ -3,6 +3,7 @@ import { Callout } from "@/components/content/Callout";
 import { Figure } from "@/components/content/Figure";
 import { ProtocolTable } from "@/components/content/ProtocolTable";
 import { RFCRef, KeyTerm } from "@/components/content/Inline";
+import { Annotate } from "@/components/content/Annotate";
 import { WorkedExample } from "@/components/content/WorkedExample";
 import { HeaderDiagram } from "@/components/HeaderDiagram";
 import { SequenceDiagram } from "@/components/SequenceDiagram";
@@ -22,6 +23,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     ProtocolTable,
     RFCRef,
     KeyTerm,
+    Annotate,
     WorkedExample,
     HeaderDiagram,
     SequenceDiagram,
