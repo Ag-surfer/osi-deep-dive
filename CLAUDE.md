@@ -35,6 +35,20 @@ The **build is part of the gate** because static-export errors (e.g. a dynamic r
 - **Visual verification:** Playwright MCP wasn't available mid-session; `scripts/shoot.mjs` (local
   Playwright) screenshots pages so changes can be eyeballed. `npm run dev` then `node scripts/shoot.mjs`.
 
+## Dev-time MCP servers (`.mcp.json`)
+
+These are **development tools** (they load at session start and never ship in the static build):
+
+- **playwright** (`@playwright/mcp`) — drive the rendered site for visual QA / screenshots.
+- **mermaid** (`mcp-mermaid`) — render Mermaid definitions to **SVG/PNG**; commit the SVG and inline
+  it for clean (non-sketchy) diagrams like state machines / sequences.
+- **excalidraw** (`excalidraw-mcp`) — author Excalidraw scenes for bespoke art.
+
+They start via `npx`, so no manual install — but Claude Code loads MCP servers **at session start**,
+so after editing `.mcp.json` you must restart the session (and approve the servers) before the tools
+appear. For diagrams that should be theme-aware/responsive/animated, prefer the in-app **rough.js**
+components in `components/diagrams/` over committing static images.
+
 ## Deploy
 
 Push to `main` → `.github/workflows/deploy.yml` builds + publishes to Pages. Live at
