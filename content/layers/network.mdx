@@ -1,0 +1,206 @@
+export const sources = [
+  { label: "RFC 791 — Internet Protocol (IPv4)", href: "https://www.rfc-editor.org/rfc/rfc791.html" },
+  { label: "RFC 8200 — Internet Protocol, Version 6 (IPv6)", href: "https://www.rfc-editor.org/rfc/rfc8200.html" },
+  { label: "RFC 792 — Internet Control Message Protocol (ICMP)", href: "https://www.rfc-editor.org/rfc/rfc792.html" },
+  { label: "RFC 4632 — Classless Inter-Domain Routing (CIDR)", href: "https://www.rfc-editor.org/rfc/rfc4632.html" },
+  { label: "RFC 1918 — Address Allocation for Private Internets", href: "https://www.rfc-editor.org/rfc/rfc1918.html" },
+  { label: "Kurose & Ross, Computer Networking: A Top-Down Approach, Ch. 4–5", href: "https://gaia.cs.umass.edu/kurose_ross/index.php" },
+];
+
+## The problem the Network layer solves
+
+The Data Link layer below can only move a frame between two nodes on **the same physical
+network** — one Ethernet segment, one Wi-Fi cell. But the internet is a *network of networks*: hundreds
+of thousands of independently operated links stitched together. The Network layer exists to answer one
+question end to end: **given a destination anywhere in the world, which next hop gets the data
+closer, and how is it addressed so every intermediate router can make that decision independently?**
+
+It does this with two pillars: a **global, hierarchical addressing scheme** (IP addresses) that is
+independent of any underlying link technology, and **routing** — the distributed algorithms and
+forwarding logic that move a packet hop by hop toward its destination.
+
+<Callout variant="insight" title="Best-effort, connectionless delivery">
+IP makes **no promises**. Packets can be lost, duplicated, reordered, or delayed. There is no
+connection and no acknowledgment at this layer. This is a deliberate design choice — the
+*end-to-end principle* pushes reliability up to the Transport layer (TCP), keeping the core of the
+network simple, stateless, and massively scalable.
+</Callout>
+
+## Logical addressing: how IP addresses work
+
+A link-layer MAC address is *flat* — it identifies a NIC but says nothing about **where** that NIC
+is. You cannot route on it at global scale. An IP address is **hierarchical**: it encodes a network
+portion and a host portion, so routers can aggregate millions of hosts into a single routing entry.
+
+### IPv4 structure and CIDR
+
+An IPv4 address is 32 bits, written as four dotted octets (e.g. `192.0.2.131`). A **prefix length**
+splits it into network and host parts: `192.0.2.0/24` means the first 24 bits identify the network,
+leaving 8 bits (256 addresses) for hosts. This is **CIDR** (<RFCRef n={4632} />) — it replaced the
+rigid old "Class A/B/C" scheme with arbitrary prefix lengths, enabling efficient allocation and
+**route aggregation** (advertising `10.0.0.0/8` instead of millions of separate routes).
+
+<Callout variant="note" title="Subnetting in one line">
+The number after the slash is how many leading bits are *fixed*. Hosts available ≈ 2^(32 − prefix) − 2
+(subtract the network and broadcast addresses). A `/30` gives 2 usable hosts — exactly enough for a
+point-to-point link.
+</Callout>
+
+Some ranges are reserved and never routed on the public internet (<RFCRef n={1918} />):
+`10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16` are **private** address space, reused behind NAT
+in homes and enterprises everywhere.
+
+## Routing vs. forwarding
+
+These two words are often conflated; the distinction is fundamental.
+
+- **Forwarding** is the *per-packet*, data-plane action: a router reads the destination IP, looks it
+  up in its forwarding table, and sends the packet out the right interface. This happens in
+  hardware, billions of times per second.
+- **Routing** is the *control-plane* process of **building** that table: routers exchange reachability
+  information via routing protocols and compute best paths.
+
+The lookup uses **longest-prefix match**: among all matching routes, the most *specific* (longest
+prefix) wins. A packet to `192.0.2.5` matching both `192.0.2.0/24` and `0.0.0.0/0` (the default
+route) follows the `/24`.
+
+<ProtocolTable
+  rows={[
+    { name: "IPv4", standard: "RFC 791", purpose: "Core 32-bit addressing and best-effort packet delivery." },
+    { name: "IPv6", standard: "RFC 8200", purpose: "128-bit successor; restores end-to-end addressing." },
+    { name: "ICMP", standard: "RFC 792", purpose: "Diagnostics and error reporting (ping, unreachable, time exceeded)." },
+    { name: "OSPF", standard: "RFC 2328", purpose: "Interior gateway protocol; link-state, computes shortest paths within an AS." },
+    { name: "BGP", standard: "RFC 4271", purpose: "The internet's exterior routing protocol; path-vector between autonomous systems." },
+    { name: "IPsec", standard: "RFC 4301", purpose: "Authentication and encryption of IP packets (VPNs)." },
+  ]}
+/>
+
+## The IPv4 header, field by field
+
+Every IPv4 packet carries a minimum **20-byte** header (160 bits). Click any field to see what it
+does. This layout is defined byte-for-byte in <RFCRef n={791} />.
+
+<HeaderDiagram
+  title="IPv4 header (RFC 791) — 20 bytes minimum"
+  fields={[
+    { name: "Version", bits: 4, desc: "IP version number — 4 for IPv4." },
+    { name: "IHL", bits: 4, desc: "Internet Header Length, in 32-bit words. Minimum 5 (=20 bytes); larger when Options are present." },
+    { name: "DSCP/ECN", bits: 8, desc: "Type of Service: 6 bits of Differentiated Services Code Point (QoS class) plus 2 bits of Explicit Congestion Notification." },
+    { name: "Total Length", bits: 16, desc: "Entire packet size (header + data) in bytes. Max 65,535." },
+    { name: "Identification", bits: 16, desc: "Groups fragments of one original datagram so the receiver can reassemble them." },
+    { name: "Flags", bits: 3, desc: "Bit 0 reserved; DF = Don't Fragment; MF = More Fragments (set on all but the last fragment)." },
+    { name: "Fragment Offset", bits: 13, desc: "Position of this fragment in the original datagram, in 8-byte units." },
+    { name: "TTL", bits: 8, desc: "Time To Live: decremented by each router; at 0 the packet is dropped and an ICMP Time Exceeded is returned. Prevents loops." },
+    { name: "Protocol", bits: 8, desc: "Identifies the encapsulated payload: 6 = TCP, 17 = UDP, 1 = ICMP." },
+    { name: "Header Checksum", bits: 16, desc: "Covers the header only; recomputed at every hop because TTL changes." },
+    { name: "Source Address", bits: 32, desc: "32-bit IPv4 address of the sender." },
+    { name: "Destination Address", bits: 32, desc: "32-bit IPv4 address of the intended recipient." },
+    { name: "Options", bits: 32, desc: "Optional, variable-length (rarely used): record route, timestamp, etc. Padded to a 32-bit boundary.", variable: true },
+  ]}
+/>
+
+### Fragmentation and the MTU
+
+Each link has a **Maximum Transmission Unit** — the largest frame it can carry (1500 bytes on classic
+Ethernet). If a packet is too big for the next link, IPv4 routers may **fragment** it, using the
+Identification, Flags, and Fragment Offset fields so the destination can reassemble. Fragmentation is
+costly and fragile, so modern stacks set **DF** and use *Path MTU Discovery* instead. **IPv6 abolishes
+in-network fragmentation entirely** — only the source host may fragment.
+
+## ICMP: the network layer's diagnostic voice
+
+<RFCRef n={792}>ICMP</RFCRef> rides inside IP (Protocol = 1) and carries control and error messages:
+*Destination Unreachable*, *Time Exceeded*, *Echo Request/Reply*. Two everyday tools are built on it:
+
+- **`ping`** sends ICMP Echo Requests and times the replies — basic reachability and latency.
+- **`traceroute`** sends packets with TTL = 1, 2, 3, … Each router that decrements TTL to 0 returns a
+  *Time Exceeded*, revealing the path hop by hop. (A beautiful hack: the loop-prevention field becomes
+  a network-mapping tool.)
+
+## IPv6: why, and what changed
+
+IPv4's 32 bits allow ~4.3 billion addresses — long since exhausted. **IPv6 uses 128-bit addresses**
+(~3.4 × 10³⁸), written as eight groups of hex (`2001:db8::1`). Beyond size, the header was
+**simplified**: fixed 40-byte length, no header checksum (left to lower/upper layers), and no
+in-network fragmentation — making router forwarding faster and simpler.
+
+<HeaderDiagram
+  title="IPv6 header (RFC 8200) — 40 bytes fixed"
+  fields={[
+    { name: "Version", bits: 4, desc: "6 for IPv6." },
+    { name: "Traffic Class", bits: 8, desc: "QoS / DiffServ + ECN, analogous to IPv4's DSCP/ECN byte." },
+    { name: "Flow Label", bits: 20, desc: "Labels a flow of related packets so routers can give them consistent handling without deep inspection." },
+    { name: "Payload Length", bits: 16, desc: "Length of the data following this header, in bytes (the fixed header is not counted)." },
+    { name: "Next Header", bits: 8, desc: "Type of the next header — an upper-layer protocol (TCP/UDP) or an IPv6 extension header." },
+    { name: "Hop Limit", bits: 8, desc: "IPv6's TTL: decremented per hop, dropped at 0." },
+    { name: "Source Address", bits: 128, desc: "128-bit IPv6 address of the sender." },
+    { name: "Destination Address", bits: 128, desc: "128-bit IPv6 address of the recipient." },
+  ]}
+/>
+
+## Where it lives: devices and the real world
+
+The Network layer is the domain of the **router** — the device that connects different networks and
+makes forwarding decisions. **Layer-3 switches** fold routing into switching hardware for speed inside
+a datacenter; **firewalls** filter on IP addresses and protocol. Your home router is doing L3
+forwarding plus NAT every time you load a page.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the field behind them">
+- **"Request timed out" on ping** — no route, a firewall dropping ICMP, or the host is down.
+- **TTL expired in transit** — a **routing loop**; packets circle until TTL hits 0. Watch
+  `traceroute` repeat the same hops.
+- **Fragmentation needed but DF set** — a Path MTU black hole, often from a tunnel/VPN lowering the
+  MTU while ICMP is filtered. Symptom: small requests work, large transfers hang.
+- **Asymmetric routing / blackholes** — a more-specific bad route silently swallows traffic
+  (longest-prefix match is unforgiving).
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface at Layer 3">
+- **IP spoofing** — forging the source address. IP never authenticates the sender, enabling reflection
+  and amplification attacks. Mitigated by ingress filtering (BCP 38).
+- **Smurf / amplification** — spoof a victim's source and ping a broadcast or open service; replies
+  flood the victim.
+- **Fragmentation attacks** — overlapping or tiny fragments to evade firewalls/IDS or exhaust
+  reassembly buffers (teardrop).
+- **BGP hijacking & route leaks** — announcing prefixes you don't own reroutes global traffic.
+  Defended with RPKI/ROA origin validation.
+- **Defense in depth** — **IPsec** authenticates and encrypts at this layer; it underpins
+  site-to-site VPNs.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "A router has routes 0.0.0.0/0, 192.0.2.0/24, and 192.0.2.128/25. To which does a packet for 192.0.2.130 forward?",
+      options: ["0.0.0.0/0 (default)", "192.0.2.0/24", "192.0.2.128/25"],
+      answer: 2,
+      explanation: "Longest-prefix match: 192.0.2.130 falls in all three, but /25 is the most specific (longest) prefix, so it wins.",
+    },
+    {
+      q: "Why must the IPv4 header checksum be recomputed at every router hop?",
+      options: [
+        "Because the payload changes",
+        "Because TTL is decremented, changing the header",
+        "Because the source address is rewritten",
+      ],
+      answer: 1,
+      explanation: "The checksum covers only the header. TTL decrements each hop, so the header changes and the checksum must be recalculated.",
+    },
+    {
+      q: "What fundamentally distinguishes an IP address from a MAC address for global routing?",
+      options: [
+        "IP addresses are longer",
+        "IP addresses are hierarchical, so routes can be aggregated",
+        "MAC addresses change at every hop",
+      ],
+      answer: 1,
+      explanation: "IP addressing is hierarchical (network + host via a prefix), letting routers aggregate many hosts into one route. MAC addresses are flat and cannot scale globally.",
+    },
+  ]}
+/>

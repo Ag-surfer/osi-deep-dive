@@ -1,0 +1,17 @@
+## Managing dialogues
+
+The Session layer establishes, maintains, synchronizes, and gracefully tears down **sessions** —
+ongoing dialogues between two applications. It introduces ideas like **dialog control** (who may send,
+and when) and **checkpointing/synchronization** so a long transfer can resume after a failure rather
+than restart.
+
+<Callout variant="note" title="A note on the modern stack">
+In the real TCP/IP world, the Session layer has **no dedicated protocol**. Its responsibilities are
+absorbed by the Transport layer (connections), by application protocols, and by libraries (TLS session
+resumption, RPC/gRPC frameworks, WebSocket sessions). We explain both the OSI ideal and where it
+actually lives today.
+</Callout>
+
+<Callout variant="note" title="Full deep-dive in progress">
+The complete treatment is being authored. The at-a-glance facts above are accurate today.
+</Callout>

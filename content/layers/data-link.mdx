@@ -1,0 +1,12 @@
+## Framing and node-to-node delivery
+
+The Data Link layer turns the Physical layer's raw bit pipe into something usable: it groups bits into
+**frames**, delimits where each frame begins and ends, addresses them with **MAC addresses**, detects
+corruption with a **frame check sequence (CRC)**, and on shared media decides **who gets to transmit**.
+It is split into two sublayers — **LLC** (logical link control) and **MAC** (media access control).
+
+<Callout variant="note" title="Full deep-dive in progress">
+The complete treatment — the Ethernet frame format (byte-accurate), MAC addressing, CSMA/CD vs.
+CSMA/CA, switching and the forwarding table, VLANs, and ARP's role — is being authored. The
+at-a-glance facts above are accurate today.
+</Callout>

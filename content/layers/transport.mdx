@@ -1,0 +1,13 @@
+## Process-to-process delivery
+
+The Transport layer connects not just hosts but **the specific programs running on them**, using
+**port numbers** to multiplex many conversations over one IP address. It offers two contrasting
+contracts: **TCP** — connection-oriented, reliable, ordered, flow- and congestion-controlled — and
+**UDP** — a thin, fast, connectionless datagram service. This is where the internet's reliability
+actually lives, by design (the end-to-end principle).
+
+<Callout variant="note" title="Full deep-dive in progress">
+The complete treatment — the TCP three-way handshake, the TCP segment header (byte-accurate),
+sequence/acknowledgment numbers, flow control (sliding window) vs. congestion control (slow start,
+AIMD), and TCP vs. UDP vs. QUIC — is being authored. The at-a-glance facts above are accurate today.
+</Callout>

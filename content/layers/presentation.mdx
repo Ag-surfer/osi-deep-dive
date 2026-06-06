@@ -1,0 +1,16 @@
+## The translator
+
+The Presentation layer ensures that data sent by one system is **intelligible** to another. It handles
+**syntax and semantics of information**: character encoding (ASCII ↔ Unicode/UTF-8), **serialization**
+of data structures into a common wire format, **compression**, and **encryption/decryption**. It is the
+boundary between application-specific data structures and a neutral on-the-wire representation.
+
+<Callout variant="note" title="A note on the modern stack">
+Like the Session layer, Presentation has no single protocol in TCP/IP. Its jobs are done by formats and
+libraries: **TLS** (encryption), **JPEG/PNG/H.264** (media encoding), **ASN.1**, and **JSON/Protocol
+Buffers** (serialization). We map the OSI concept to these concrete technologies.
+</Callout>
+
+<Callout variant="note" title="Full deep-dive in progress">
+The complete treatment is being authored. The at-a-glance facts above are accurate today.
+</Callout>
