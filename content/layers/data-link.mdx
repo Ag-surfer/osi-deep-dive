@@ -30,16 +30,7 @@ addressing is needed to cross between networks.
 
 ## The Ethernet frame, field by field
 
-<HeaderDiagram
-  title="Ethernet II frame (IEEE 802.3) — header + trailer around the payload"
-  fields={[
-    { name: "Destination MAC", bits: 48, desc: "Hardware address of the receiving NIC on this segment (or broadcast/multicast)." },
-    { name: "Source MAC", bits: 48, desc: "Hardware address of the sending NIC." },
-    { name: "EtherType / Length", bits: 16, desc: "≥ 0x0600 (1536) names the upper protocol — 0x0800 = IPv4, 0x0806 = ARP, 0x86DD = IPv6. ≤ 1500 instead means payload length (802.3)." },
-    { name: "Payload", bits: 96, desc: "The encapsulated packet, 46–1500 bytes. Below 46 it is padded so the frame meets the 64-byte minimum.", variable: true },
-    { name: "FCS", bits: 32, desc: "Frame Check Sequence: a CRC-32 over the frame. If it doesn't match on receipt, the frame is silently dropped — the Data Link layer detects errors but does not correct them." },
-  ]}
-/>
+<NamedHeader id="ethernet" />
 
 <Callout variant="note" title="VLAN tag (802.1Q)">
 A 4-byte **802.1Q tag** can be inserted right after the Source MAC to mark a frame's **VLAN** (a

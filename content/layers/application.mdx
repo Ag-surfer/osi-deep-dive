@@ -19,7 +19,7 @@ carry these conversations.
     { name: "DNS", fullName: "Domain Name System", standard: "RFC 1035", purpose: "Resolves human names (example.com) to IP addresses; the internet's phone book." },
     { name: "SMTP", fullName: "Simple Mail Transfer Protocol", standard: "RFC 5321", purpose: "Sends and relays email between mail servers." },
     { name: "DHCP", fullName: "Dynamic Host Configuration Protocol", standard: "RFC 2131", purpose: "Hands a joining host its IP address, gateway, and DNS servers." },
-    { name: "SSH", fullName: "Secure Shell", standard: "RFC 4251", purpose: "Encrypted remote login and tunneling." },
+    { name: "SSH", fullName: "Secure Shell", standard: "RFC 4253", purpose: "Encrypted remote login and tunneling (transport layer of SSH)." },
   ]}
 />
 
@@ -50,24 +50,7 @@ tunnel (Presentation-layer encryption), and **HTTP/3** runs over QUIC.
 Before your browser can open a TCP connection, it must turn `example.com` into an IP address. DNS does
 this with a compact 12-byte header.
 
-<HeaderDiagram
-  title="DNS message header (RFC 1035) — 12 bytes"
-  fields={[
-    { name: "ID", bits: 16, desc: "Transaction ID matching a reply to its query." },
-    { name: "QR", bits: 1, desc: "0 = query, 1 = response." },
-    { name: "Opcode", bits: 4, desc: "Query type — standard, inverse, status." },
-    { name: "AA", bits: 1, desc: "Authoritative Answer — the responder owns this zone." },
-    { name: "TC", bits: 1, desc: "Truncated — answer too big for UDP; retry over TCP." },
-    { name: "RD", bits: 1, desc: "Recursion Desired — please resolve fully on my behalf." },
-    { name: "RA", bits: 1, desc: "Recursion Available — this server will recurse." },
-    { name: "Z", bits: 3, desc: "Reserved (and DNSSEC bits); historically zero." },
-    { name: "RCODE", bits: 4, desc: "Response code — 0 = no error, 3 = NXDOMAIN (name doesn't exist)." },
-    { name: "QDCOUNT", bits: 16, desc: "Number of questions." },
-    { name: "ANCOUNT", bits: 16, desc: "Number of answer records." },
-    { name: "NSCOUNT", bits: 16, desc: "Number of authority (name server) records." },
-    { name: "ARCOUNT", bits: 16, desc: "Number of additional records." },
-  ]}
-/>
+<NamedHeader id="dns" />
 
 A recursive resolver walks the DNS hierarchy from the root down:
 

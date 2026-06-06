@@ -6,6 +6,7 @@ import { RFCRef, KeyTerm } from "@/components/content/Inline";
 import { Annotate } from "@/components/content/Annotate";
 import { WorkedExample } from "@/components/content/WorkedExample";
 import { HeaderDiagram } from "@/components/HeaderDiagram";
+import { NamedHeader } from "@/components/NamedHeader";
 import { SequenceDiagram } from "@/components/SequenceDiagram";
 import { Quiz } from "@/components/Quiz";
 import { NetworkTopology } from "@/components/diagrams/NetworkTopology";
@@ -26,6 +27,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     Annotate,
     WorkedExample,
     HeaderDiagram,
+    NamedHeader,
     SequenceDiagram,
     Quiz,
     NetworkTopology,
