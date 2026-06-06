@@ -45,6 +45,8 @@ It is **stateless** by design — each request stands alone, which is why cookie
 layer concerns) exist to thread identity across requests. **HTTPS** is simply HTTP carried inside a TLS
 tunnel (Presentation-layer encryption), and **HTTP/3** runs over QUIC.
 
+<HttpRoundTrip />
+
 ## DNS: the lookup behind every connection
 
 Before your browser can open a TCP connection, it must turn `example.com` into an IP address. DNS does

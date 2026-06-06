@@ -107,6 +107,8 @@ Identification, Flags, and Fragment Offset fields so the destination can reassem
 costly and fragile, so modern stacks set **DF** and use *Path MTU Discovery* instead. **IPv6 abolishes
 in-network fragmentation entirely** — only the source host may fragment.
 
+<PacketRouting />
+
 ## ICMP: the network layer's diagnostic voice
 
 <RFCRef n={792}>ICMP</RFCRef> rides inside IP (Protocol = 1) and carries control and error messages:

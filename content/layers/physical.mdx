@@ -34,6 +34,8 @@ and loses count. Line codes solve clock recovery and DC balance:
 | **8b/10b** | 8 bits → 10 symbols, DC-balanced | Used in Gigabit/PCIe/SATA |
 | **PAM-4** | 4 voltage levels carry 2 bits/symbol | Doubles rate (used in 400G+ Ethernet) |
 
+<SignalWire />
+
 <Callout variant="note" title="Self-clocking is the whole point">
 There is no separate clock wire on Ethernet. The receiver extracts timing **from the data signal
 itself** — which is why guaranteeing frequent transitions (Manchester, 4B/5B, 8b/10b) matters so much.

@@ -58,6 +58,8 @@ Two different problems, often confused:
   avoidance** (linear growth), halving on loss (**AIMD** — additive increase, multiplicative decrease).
   **Fast retransmit/recovery** reacts to three duplicate ACKs without waiting for a timeout.
 
+<SlidingWindow />
+
 <WorkedExample title="Window needed to fill a fast, long link">
 Throughput on TCP is bounded by `window / RTT`. To saturate a **100 Mbps** path with an **80 ms** RTT:
 

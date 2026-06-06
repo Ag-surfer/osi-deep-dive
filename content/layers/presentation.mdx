@@ -51,6 +51,8 @@ trade-offs:
   example: it negotiates ciphers and keys, then encrypts the application's bytes — confidentiality,
   integrity, and authentication, sitting exactly where the Presentation layer says encryption belongs.
 
+<EncryptionTransform />
+
 <Callout variant="insight" title="Why TLS is 'presentation'">
 TLS doesn't care whether it's wrapping HTTP, SMTP, or IMAP — it transforms the *representation* of
 whatever bytes pass through (encrypting them) without understanding their meaning. That representation
