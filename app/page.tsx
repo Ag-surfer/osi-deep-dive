@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LayerStack } from "@/components/LayerStack";
+import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
 
 export default function Home() {
   return (
@@ -48,6 +49,18 @@ export default function Home() {
           the way down the sender&rsquo;s stack and <strong>de-encapsulated</strong> on the way up
           the receiver&rsquo;s.
         </p>
+      </section>
+
+      {/* Encapsulation visualizer */}
+      <section className="mt-16">
+        <h2 className="font-serif text-2xl font-semibold">How data travels: encapsulation</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+          As data descends the sender&rsquo;s stack, each layer wraps it in a header. Step through
+          the assembly of a frame from raw application data down to bits on the wire.
+        </p>
+        <div className="mt-5">
+          <EncapsulationVisualizer />
+        </div>
       </section>
 
       {/* How to use */}
