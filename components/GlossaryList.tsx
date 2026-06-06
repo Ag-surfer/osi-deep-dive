@@ -48,8 +48,8 @@ export function GlossaryList() {
                 {layer ? (
                   <Link
                     href={`/layers/${layer.slug}/`}
-                    className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white"
-                    style={{ backgroundColor: layer.color }}
+                    className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                    style={{ backgroundColor: layer.color, color: "var(--on-accent)" }}
                   >
                     L{layer.number} {layer.name}
                   </Link>

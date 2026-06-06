@@ -29,8 +29,8 @@ export function LayerNav() {
                 style={active ? { backgroundColor: "var(--bg-soft)" } : undefined}
               >
                 <span
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-xs font-bold text-white"
-                  style={{ backgroundColor: l.color }}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-xs font-bold"
+                  style={{ backgroundColor: l.color, color: "var(--on-accent)" }}
                 >
                   {l.number}
                 </span>

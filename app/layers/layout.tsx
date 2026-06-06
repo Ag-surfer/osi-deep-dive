@@ -1,4 +1,5 @@
 import { LayerNav } from "@/components/LayerNav";
+import { MobileLayerBar } from "@/components/MobileLayerBar";
 
 /** Two-column shell for all layer pages: sticky layer nav + content. */
 export default function LayersLayout({ children }: { children: React.ReactNode }) {
@@ -9,7 +10,10 @@ export default function LayersLayout({ children }: { children: React.ReactNode }
           <LayerNav />
         </div>
       </aside>
-      <main className="min-w-0 flex-1">{children}</main>
+      <main className="min-w-0 flex-1">
+        <MobileLayerBar />
+        {children}
+      </main>
     </div>
   );
 }

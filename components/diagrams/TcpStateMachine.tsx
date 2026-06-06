@@ -71,6 +71,7 @@ export function TcpStateMachine() {
       width={790}
       height={270}
       draw={draw}
+      summary="State diagram: CLOSED → (send SYN) → SYN_SENT → (receive SYN+ACK, send ACK) → ESTABLISHED → (send FIN) → FIN_WAIT → (receive ACK/FIN, send ACK) → TIME_WAIT → (2·MSL timeout) → CLOSED."
       caption="A simplified TCP state walk: the active-open handshake (top) establishes the connection; the graceful close (bottom) tears it down, ending in TIME_WAIT before returning to CLOSED."
     />
   );

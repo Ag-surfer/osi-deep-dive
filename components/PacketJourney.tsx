@@ -102,7 +102,12 @@ export function PacketJourney() {
       </div>
 
       {/* Narrative */}
-      <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+      <div
+        className="mt-5 border-t pt-4"
+        style={{ borderColor: "var(--border)" }}
+        role="status"
+        aria-live="polite"
+      >
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="font-serif text-lg font-semibold">{step.title}</h3>
           <span className="shrink-0 font-mono text-xs" style={{ color: "var(--fg-muted)" }}>
@@ -125,8 +130,8 @@ export function PacketJourney() {
             type="button"
             onClick={() => setI((n) => Math.min(STEPS.length - 1, n + 1))}
             disabled={i === STEPS.length - 1}
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-            style={{ backgroundColor: "var(--color-layer-3)" }}
+            className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-40"
+            style={{ backgroundColor: "var(--color-layer-3)", color: "var(--on-accent)" }}
           >
             Next ▶
           </button>
@@ -166,8 +171,8 @@ function Stack({ side, active, label }: { side: Side; active: Step; label: strin
               }}
             >
               <span
-                className="flex h-4 w-4 items-center justify-center rounded font-mono text-[10px] font-bold text-white"
-                style={{ backgroundColor: l.color }}
+                className="flex h-4 w-4 items-center justify-center rounded font-mono text-[10px] font-bold"
+                style={{ backgroundColor: l.color, color: "var(--on-accent)" }}
               >
                 {l.number}
               </span>

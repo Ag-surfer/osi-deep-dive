@@ -54,6 +54,7 @@ export function NetworkTopology() {
       width={820}
       height={210}
       draw={draw}
+      summary="Topology diagram: Host A and Host B connect to a Layer-2 switch, which connects to a Layer-3 router, then out to the internet and a remote server."
       caption="A switch forwards by MAC within the LAN (L2); a router forwards by IP between networks (L3). IP addresses stay fixed end-to-end; MAC addresses change at every hop."
     />
   );

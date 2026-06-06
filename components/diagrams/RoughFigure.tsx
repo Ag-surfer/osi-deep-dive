@@ -52,11 +52,14 @@ export function RoughFigure({
   height,
   draw,
   caption,
+  summary,
 }: {
   width: number;
   height: number;
   draw: RoughDraw;
   caption?: string;
+  /** A text description of the diagram's content for screen readers. */
+  summary?: string;
 }) {
   const ref = useRef<SVGSVGElement>(null);
 
@@ -95,9 +98,10 @@ export function RoughFigure({
           width="100%"
           style={{ maxWidth: width, color: "var(--fg)" }}
           role="img"
-          aria-label={caption ?? "diagram"}
+          aria-label={caption ?? summary ?? "Hand-drawn diagram"}
         />
       </div>
+      {summary ? <p className="sr-only">{summary}</p> : null}
       {caption ? (
         <figcaption className="mt-2 text-center text-sm" style={{ color: "var(--fg-muted)" }}>
           {caption}

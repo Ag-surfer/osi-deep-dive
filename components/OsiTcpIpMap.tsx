@@ -21,8 +21,8 @@ export function OsiTcpIpMap() {
           {LAYERS_TOP_DOWN.map((l) => (
             <div
               key={l.slug}
-              className="flex items-center gap-2 rounded px-3 py-2 text-sm text-white"
-              style={{ backgroundColor: l.color }}
+              className="flex items-center gap-2 rounded px-3 py-2 text-sm"
+              style={{ backgroundColor: l.color, color: "var(--on-accent)" }}
             >
               <span className="font-mono text-xs font-bold">{l.number}</span>
               <span>{l.name}</span>

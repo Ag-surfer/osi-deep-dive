@@ -18,6 +18,7 @@ interface Segment {
   fieldIndex: number;
   bits: number; // bits of this field in this row
   startBit: number; // bit offset within the row (0..wordBits)
+  isStart: boolean; // true for the first fragment of a field (the tab stop / labeled cell)
 }
 
 /**
@@ -41,67 +42,85 @@ export function HeaderDiagram({
     <div className="my-6">
       {title ? <p className="mb-2 text-sm font-semibold">{title}</p> : null}
 
-      {/* Bit ruler */}
-      <div
-        className="grid font-mono text-[10px]"
-        style={{
-          gridTemplateColumns: `repeat(${wordBits}, minmax(0, 1fr))`,
-          color: "var(--fg-muted)",
-        }}
-        aria-hidden
-      >
-        {Array.from({ length: wordBits }, (_, i) => (
-          <span
-            key={i}
-            className="border-b pb-0.5 text-center"
+      {/* Scrollable on narrow screens: keep a legible min width instead of crushing 32 columns. */}
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: wordBits * 16 }}>
+          {/* Bit ruler */}
+          <div
+            className="grid font-mono text-[10px]"
+            style={{
+              gridTemplateColumns: `repeat(${wordBits}, minmax(0, 1fr))`,
+              color: "var(--fg-muted)",
+            }}
+            aria-hidden
+          >
+            {Array.from({ length: wordBits }, (_, i) => (
+              <span
+                key={i}
+                className="border-b pb-0.5 text-center"
+                style={{ borderColor: "var(--border)" }}
+              >
+                {i % 4 === 0 || i === wordBits - 1 ? i : ""}
+              </span>
+            ))}
+          </div>
+
+          {/* Field rows */}
+          <div
+            className="overflow-hidden rounded-b-md border border-t-0"
             style={{ borderColor: "var(--border)" }}
           >
-            {i % 4 === 0 || i === wordBits - 1 ? i : ""}
-          </span>
-        ))}
-      </div>
-
-      {/* Field rows */}
-      <div
-        className="overflow-hidden rounded-b-md border border-t-0"
-        style={{ borderColor: "var(--border)" }}
-      >
-        {rows.map((row, ri) => (
-          <div
-            key={ri}
-            className="grid"
-            style={{ gridTemplateColumns: `repeat(${wordBits}, minmax(0, 1fr))` }}
-          >
-            {row.map((seg, si) => {
-              const isSel = selected === seg.fieldIndex;
-              const color = FIELD_COLORS[seg.fieldIndex % FIELD_COLORS.length];
-              return (
-                <button
-                  key={si}
-                  type="button"
-                  onClick={() => setSelected(isSel ? null : seg.fieldIndex)}
-                  title={`${seg.field.name} — ${seg.field.bits} bit${seg.field.bits === 1 ? "" : "s"}`}
-                  className="min-w-0 border px-1 py-2 text-center text-[11px] leading-tight transition-colors"
-                  style={{
-                    gridColumn: `span ${seg.bits} / span ${seg.bits}`,
-                    borderColor: "var(--bg)",
-                    borderStyle: seg.field.variable ? "dashed" : "solid",
-                    backgroundColor: isSel
-                      ? color
-                      : `color-mix(in oklch, ${color} 22%, var(--bg-soft))`,
-                    color: isSel ? "white" : "var(--fg)",
-                    outline: isSel ? `2px solid ${color}` : "none",
-                  }}
-                >
-                  <span className="block truncate font-medium">{seg.field.name}</span>
-                  <span className="block opacity-70">
-                    {seg.field.variable ? "var" : seg.field.bits}
-                  </span>
-                </button>
-              );
-            })}
+            {rows.map((row, ri) => (
+              <div
+                key={ri}
+                className="grid"
+                style={{ gridTemplateColumns: `repeat(${wordBits}, minmax(0, 1fr))` }}
+              >
+                {row.map((seg, si) => {
+                  const isSel = selected === seg.fieldIndex;
+                  const color = FIELD_COLORS[seg.fieldIndex % FIELD_COLORS.length];
+                  // A field that wraps across a 32-bit word renders as multiple
+                  // segments; only the first is a tab stop / labeled, so screen
+                  // readers and keyboard users see one logical field, not several.
+                  const sizeLabel = seg.field.variable
+                    ? "variable length"
+                    : `${seg.field.bits} bit${seg.field.bits === 1 ? "" : "s"}`;
+                  return (
+                    <button
+                      key={si}
+                      type="button"
+                      onClick={() => setSelected(isSel ? null : seg.fieldIndex)}
+                      tabIndex={seg.isStart ? 0 : -1}
+                      aria-hidden={seg.isStart ? undefined : true}
+                      aria-pressed={seg.isStart ? isSel : undefined}
+                      aria-label={
+                        seg.isStart
+                          ? `${seg.field.name}, ${sizeLabel}, field ${seg.fieldIndex + 1} of ${fields.length}`
+                          : undefined
+                      }
+                      className="min-w-0 border px-1 py-2 text-center text-[11px] leading-tight transition-colors"
+                      style={{
+                        gridColumn: `span ${seg.bits} / span ${seg.bits}`,
+                        borderColor: "var(--bg)",
+                        borderStyle: seg.field.variable ? "dashed" : "solid",
+                        backgroundColor: isSel
+                          ? color
+                          : `color-mix(in oklch, ${color} 22%, var(--bg-soft))`,
+                        color: isSel ? "var(--on-accent)" : "var(--fg)",
+                        outline: isSel ? `2px solid ${color}` : "none",
+                      }}
+                    >
+                      <span className="block truncate font-medium">{seg.field.name}</span>
+                      <span className="block opacity-70">
+                        {seg.field.variable ? "var" : seg.field.bits}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
 
       {/* Detail panel */}
@@ -140,10 +159,12 @@ export function layoutRows(fields: HeaderField[], wordBits: number): Segment[][]
 
   fields.forEach((field, fieldIndex) => {
     let remaining = Math.max(1, field.bits);
+    let first = true;
     while (remaining > 0) {
       const space = wordBits - cursor;
       const take = Math.min(remaining, space);
-      row.push({ field, fieldIndex, bits: take, startBit: cursor });
+      row.push({ field, fieldIndex, bits: take, startBit: cursor, isStart: first });
+      first = false;
       cursor += take;
       remaining -= take;
       if (cursor >= wordBits) {

@@ -55,6 +55,7 @@ export function OsiStackArt() {
       width={520}
       height={388}
       draw={draw}
+      summary="The seven OSI layers from top to bottom: 7 Application (Data), 6 Presentation (Data), 5 Session (Data), 4 Transport (Segment), 3 Network (Packet), 2 Data Link (Frame), 1 Physical (Bits). Data is encapsulated going down and de-encapsulated going up."
       caption="The OSI stack: each layer wraps the one above as data descends the sender's stack, and unwraps as it climbs the receiver's."
     />
   );

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LAYERS_TOP_DOWN } from "@/lib/layers";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 type Kind = "data" | "l4" | "l3" | "l2" | "bits";
 
@@ -68,33 +70,39 @@ const STAGES: Stage[] = [
 export function EncapsulationVisualizer() {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const reduceMotion = usePrefersReducedMotion();
   const stage = STAGES[step]!;
 
-  // Auto-advance while playing (setState in a timer callback is the allowed pattern).
+  // Keep the latest step in a ref so the interval can read it without nesting
+  // one setter inside another's updater (and without a stale closure).
+  const stepRef = useRef(step);
   useEffect(() => {
-    if (!playing) return;
+    stepRef.current = step;
+  }, [step]);
+
+  // Auto-advance while playing. Disabled when the user prefers reduced motion.
+  useEffect(() => {
+    if (!playing || reduceMotion) return;
     const id = setInterval(() => {
-      setStep((s) => {
-        if (s >= STAGES.length - 1) {
-          setPlaying(false);
-          return s;
-        }
-        return s + 1;
-      });
+      if (stepRef.current >= STAGES.length - 1) {
+        setPlaying(false);
+        return;
+      }
+      setStep((s) => s + 1);
     }, 1400);
     return () => clearInterval(id);
-  }, [playing]);
+  }, [playing, reduceMotion]);
 
   return (
     <div className="rounded-lg border p-4" style={{ borderColor: "var(--border)" }}>
       <div className="flex flex-col gap-5 sm:flex-row">
         {/* Mini stack */}
         <ol className="flex shrink-0 flex-col gap-1 sm:w-44">
-          {[7, 6, 5, 4, 3, 2, 1].map((n) => {
-            const active = stage.layer === n || (step === 0 && n >= 5);
+          {LAYERS_TOP_DOWN.map((l) => {
+            const active = stage.layer === l.number || (step === 0 && l.number >= 5);
             return (
               <li
-                key={n}
+                key={l.slug}
                 className="flex items-center gap-2 rounded px-2 py-1 text-sm transition-colors"
                 style={{
                   backgroundColor: active ? "var(--bg-soft)" : "transparent",
@@ -102,19 +110,21 @@ export function EncapsulationVisualizer() {
                 }}
               >
                 <span
-                  className="flex h-5 w-5 items-center justify-center rounded font-mono text-[11px] font-bold text-white"
-                  style={{ backgroundColor: `var(--color-layer-${n})` }}
+                  className="flex h-5 w-5 items-center justify-center rounded font-mono text-[11px] font-bold"
+                  style={{ backgroundColor: l.color, color: "var(--on-accent)" }}
                 >
-                  {n}
+                  {l.number}
                 </span>
-                <span className={stage.layer === n ? "font-semibold" : undefined}>L{n}</span>
+                <span className={stage.layer === l.number ? "font-semibold" : undefined}>
+                  L{l.number}
+                </span>
               </li>
             );
           })}
         </ol>
 
         {/* PDU assembly */}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1" aria-live="polite">
           <div className="flex items-baseline justify-between">
             <p className="font-serif text-lg font-semibold">{stage.pdu}</p>
             <span className="font-mono text-xs" style={{ color: "var(--fg-muted)" }}>
@@ -123,15 +133,15 @@ export function EncapsulationVisualizer() {
           </div>
 
           <div className="mt-2 flex overflow-hidden rounded-md">
-            {stage.segments.map((seg) => (
+            {stage.segments.map((seg, i) => (
               <div
-                key={seg.label}
-                className="border-r px-2 py-3 text-center text-xs font-medium text-white transition-all last:border-r-0"
+                key={`${seg.kind}-${i}`}
+                className="border-r px-2 py-3 text-center text-xs font-medium transition-all last:border-r-0"
                 style={{
                   backgroundColor: COLOR[seg.kind],
                   borderColor: "var(--bg)",
                   flex: seg.kind === "data" || seg.kind === "bits" ? "1 1 auto" : "0 0 auto",
-                  color: seg.kind === "data" ? "var(--fg)" : "white",
+                  color: seg.kind === "data" ? "var(--fg)" : "var(--on-accent)",
                   fontFamily: seg.kind === "bits" ? "var(--font-mono)" : undefined,
                 }}
               >
@@ -163,15 +173,17 @@ export function EncapsulationVisualizer() {
         >
           Next ▶
         </ControlButton>
-        <ControlButton
-          onClick={() => {
-            if (step === STAGES.length - 1) setStep(0);
-            setPlaying((p) => !p);
-          }}
-          primary
-        >
-          {playing ? "❚❚ Pause" : "▶ Play"}
-        </ControlButton>
+        {!reduceMotion ? (
+          <ControlButton
+            onClick={() => {
+              if (step === STAGES.length - 1) setStep(0);
+              setPlaying((p) => !p);
+            }}
+            primary
+          >
+            {playing ? "❚❚ Pause" : "▶ Play"}
+          </ControlButton>
+        ) : null}
         <ControlButton
           onClick={() => {
             setPlaying(false);
@@ -208,7 +220,7 @@ function ControlButton({
       style={{
         borderColor: "var(--border)",
         backgroundColor: primary ? "var(--color-layer-3)" : "transparent",
-        color: primary ? "white" : "var(--fg)",
+        color: primary ? "var(--on-accent)" : "var(--fg)",
       }}
     >
       {children}

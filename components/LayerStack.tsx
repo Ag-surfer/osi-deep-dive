@@ -58,8 +58,8 @@ function StackRow({
       >
         <div className="flex items-center gap-4 rounded-[7px] px-4 py-3">
           <span
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md font-mono text-lg font-bold text-white"
-            style={{ backgroundColor: layer.color }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md font-mono text-lg font-bold"
+            style={{ backgroundColor: layer.color, color: "var(--on-accent)" }}
           >
             {layer.number}
           </span>

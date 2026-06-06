@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useInView } from "@/lib/useInView";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 /** Fades + lifts its children into view on scroll. Respects prefers-reduced-motion. */
 export function Reveal({
@@ -14,9 +15,7 @@ export function Reveal({
   delay?: number;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>();
-  const reduce =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const reduce = usePrefersReducedMotion();
 
   if (reduce) return <div className={className}>{children}</div>;
 

@@ -64,20 +64,26 @@ function QuestionCard({ index, question }: { index: number; question: QuizQuesti
                   {String.fromCharCode(65 + oi)}
                 </span>
                 <span className="flex-1">{opt}</span>
-                {answered && isCorrect ? <span aria-hidden>✓</span> : null}
-                {answered && isPicked && !isCorrect ? <span aria-hidden>✗</span> : null}
+                {answered && isCorrect ? (
+                  <span aria-hidden>✓</span>
+                ) : answered && isPicked && !isCorrect ? (
+                  <span aria-hidden>✗</span>
+                ) : null}
+                {/* Convey correctness to assistive tech, not by color/glyph alone. */}
+                {answered && isCorrect ? <span className="sr-only"> (correct answer)</span> : null}
+                {answered && isPicked && !isCorrect ? (
+                  <span className="sr-only"> (your answer, incorrect)</span>
+                ) : null}
               </button>
             </li>
           );
         })}
       </ul>
       {answered ? (
-        <div className="mt-3 text-sm">
+        <div className="mt-3 text-sm" role="status" aria-live="polite">
           <p
             className="font-semibold"
-            style={{
-              color: picked === question.answer ? "var(--color-layer-3)" : "var(--color-layer-1)",
-            }}
+            style={{ color: picked === question.answer ? "var(--ok)" : "var(--bad)" }}
           >
             {picked === question.answer ? "Correct." : "Not quite."}
           </p>

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { RoughNotation } from "react-rough-notation";
 import { useInView } from "@/lib/useInView";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 type AnnType = "underline" | "box" | "circle" | "highlight" | "bracket" | "strike-through";
 
@@ -32,9 +33,7 @@ export function Annotate({
   multiline?: boolean;
 }) {
   const [ref, inView] = useInView<HTMLSpanElement>();
-  const reduce =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const reduce = usePrefersReducedMotion();
   const stroke = COLORS[color] ?? color;
 
   return (

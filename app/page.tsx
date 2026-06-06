@@ -32,8 +32,8 @@ export default function Home() {
           <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">
             <Link
               href="/layers/physical/"
-              className="rounded-md px-5 py-2.5 text-sm font-semibold text-white"
-              style={{ backgroundColor: "var(--color-layer-3)" }}
+              className="rounded-md px-5 py-2.5 text-sm font-semibold"
+              style={{ backgroundColor: "var(--color-layer-3)", color: "var(--on-accent)" }}
             >
               Start at Layer 1 →
             </Link>

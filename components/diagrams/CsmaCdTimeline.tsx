@@ -63,6 +63,7 @@ export function CsmaCdTimeline() {
       width={800}
       height={210}
       draw={draw}
+      summary="Timeline: Station A begins transmitting; Station B, sensing the medium idle, also transmits; their signals overlap and collide. Both send a jam signal, wait a random backoff interval, then A retransmits."
       caption="Classic Ethernet (CSMA/CD): A and B both sense idle and transmit; their signals overlap and collide. Each detects it, sends a jam, waits a random backoff, then retries."
     />
   );

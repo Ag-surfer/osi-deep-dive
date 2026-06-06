@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
+import { MobileNav } from "./MobileNav";
 
 const NAV = [
   { href: "/", label: "Home" },
@@ -43,6 +44,7 @@ export function SiteHeader() {
             Reference
           </a>
           <ThemeToggle />
+          <MobileNav />
         </div>
       </div>
     </header>

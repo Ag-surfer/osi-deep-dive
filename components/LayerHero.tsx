@@ -13,8 +13,8 @@ export function LayerHero({ layer }: { layer: LayerMeta }) {
     <header className="mb-8">
       <div className="flex items-center gap-4">
         <span
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl font-mono text-2xl font-bold text-white"
-          style={{ backgroundColor: layer.color }}
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl font-mono text-2xl font-bold"
+          style={{ backgroundColor: layer.color, color: "var(--on-accent)" }}
         >
           {layer.number}
         </span>

@@ -45,7 +45,8 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      aria-label="Toggle dark mode"
+      aria-pressed={dark}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
       className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors hover:bg-[var(--bg-soft)]"
       style={{ borderColor: "var(--border)" }}
     >
