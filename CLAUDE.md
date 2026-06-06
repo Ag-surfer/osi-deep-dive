@@ -1,0 +1,41 @@
+# CLAUDE.md — OSI Deep Dive
+
+A statically-exported Next.js 16 educational site about the OSI model, deployed to GitHub Pages.
+
+## Quality gate (non-negotiable)
+
+`npm run check` = `typecheck + lint + format + test + build`. Nothing ships on a red gate.
+The **build is part of the gate** because static-export errors (e.g. a dynamic route missing
+`generateStaticParams`) only surface at `next build`.
+
+## Architecture
+
+- `lib/layers.ts` is the **single source of truth** — nav, stack, routing (`generateStaticParams`),
+  prev/next all derive from it. Add a layer here + a `content/layers/<slug>.mdx` file.
+- Content is **MDX**; custom components (`HeaderDiagram`, `Callout`, `Quiz`, `WorkedExample`,
+  `SequenceDiagram`, `ProtocolTable`, `RFCRef`, `KeyTerm`) are registered in `mdx-components.tsx` and
+  usable in any `.mdx` without imports.
+- `HeaderDiagram` is driven by a `fields: {name,bits,desc,variable?}[]` spec — **bits must sum to the
+  real header size** (verify against the RFC).
+
+## Lessons Learned (compounding — append, don't delete)
+
+- **Next 16 builds with Turbopack by default.** MDX remark/rehype plugins must be passed as
+  serializable **string names** (`remarkPlugins: [["remark-gfm"]]`), NOT imported functions, or the
+  build fails with "loader … does not have serializable options."
+- **`eslint-config-next@16` ships native flat-config arrays** (`eslint-config-next/core-web-vitals`,
+  `/typescript`). Spread them directly — wrapping in `FlatCompat` throws "Converting circular
+  structure to JSON."
+- **Next 16 lint enforces `react-hooks/set-state-in-effect`.** To read an external system (the DOM
+  theme class) use `useSyncExternalStore`, not `useEffect`+`setState`.
+- **GitHub Pages = static export.** `output:'export'`, `images.unoptimized:true`, `trailingSlash:true`,
+  and `basePath` derived from `GITHUB_REPOSITORY` (so dev=`/`, Pages=`/osi-deep-dive`). Dynamic routes
+  need `generateStaticParams` + `dynamicParams=false`. A `.nojekyll` file is required or Pages strips
+  the `_next/` asset dir.
+- **Visual verification:** Playwright MCP wasn't available mid-session; `scripts/shoot.mjs` (local
+  Playwright) screenshots pages so changes can be eyeballed. `npm run dev` then `node scripts/shoot.mjs`.
+
+## Deploy
+
+Push to `main` → `.github/workflows/deploy.yml` builds + publishes to Pages. Live at
+https://ag-surfer.github.io/osi-deep-dive/. Repo Settings → Pages → Source = GitHub Actions.
