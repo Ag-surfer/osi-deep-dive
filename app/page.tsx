@@ -2,42 +2,50 @@ import Link from "next/link";
 import { LayerStack } from "@/components/LayerStack";
 import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
 import { OsiTcpIpMap } from "@/components/OsiTcpIpMap";
+import { OsiStackArt } from "@/components/diagrams/OsiStackArt";
 
 export default function Home() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
       {/* Hero */}
-      <section className="text-center">
-        <p
-          className="font-mono text-xs font-semibold tracking-[0.2em] uppercase"
-          style={{ color: "var(--fg-muted)" }}
-        >
-          ISO/IEC 7498-1 · The Reference Model
-        </p>
-        <h1 className="mt-3 font-serif text-4xl font-bold sm:text-5xl">The OSI Model, in Depth</h1>
-        <p
-          className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed"
-          style={{ color: "var(--fg-muted)" }}
-        >
-          A rigorous, layer-by-layer reference for how networks really work — from raw signals on a
-          wire to the protocols your browser speaks. Each layer gets its own deep dive with
-          diagrams, bit-level header breakdowns, security analysis, and self-check questions.
-        </p>
-        <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Link
-            href="/layers/physical/"
-            className="rounded-md px-5 py-2.5 text-sm font-semibold text-white"
-            style={{ backgroundColor: "var(--color-layer-3)" }}
+      <section className="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="text-center lg:text-left">
+          <p
+            className="font-mono text-xs font-semibold tracking-[0.2em] uppercase"
+            style={{ color: "var(--fg-muted)" }}
           >
-            Start at Layer 1 →
-          </Link>
-          <Link
-            href="/journey/"
-            className="rounded-md border px-5 py-2.5 text-sm font-semibold"
-            style={{ borderColor: "var(--border)" }}
+            ISO/IEC 7498-1 · The Reference Model
+          </p>
+          <h1 className="mt-3 font-serif text-4xl font-bold sm:text-5xl">
+            The OSI Model, in Depth
+          </h1>
+          <p
+            className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed lg:mx-0"
+            style={{ color: "var(--fg-muted)" }}
           >
-            Trace a packet through all 7 layers
-          </Link>
+            A rigorous, layer-by-layer reference for how networks really work — from raw signals on
+            a wire to the protocols your browser speaks. Each layer gets its own deep dive with
+            diagrams, bit-level header breakdowns, security analysis, and self-check questions.
+          </p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">
+            <Link
+              href="/layers/physical/"
+              className="rounded-md px-5 py-2.5 text-sm font-semibold text-white"
+              style={{ backgroundColor: "var(--color-layer-3)" }}
+            >
+              Start at Layer 1 →
+            </Link>
+            <Link
+              href="/journey/"
+              className="rounded-md border px-5 py-2.5 text-sm font-semibold"
+              style={{ borderColor: "var(--border)" }}
+            >
+              Trace a packet through all 7 layers
+            </Link>
+          </div>
+        </div>
+        <div className="hidden lg:block">
+          <OsiStackArt />
         </div>
       </section>
 

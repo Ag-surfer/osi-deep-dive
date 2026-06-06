@@ -60,6 +60,8 @@ Before any data, TCP synchronizes sequence numbers in three messages:
 Closing is a symmetric **four-way** exchange (FIN/ACK in each direction), since each side shuts down its
 half of the stream independently.
 
+<TcpStateMachine />
+
 ### Flow control vs. congestion control
 
 Two different problems, often confused:

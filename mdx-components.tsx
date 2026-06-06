@@ -7,6 +7,9 @@ import { WorkedExample } from "@/components/content/WorkedExample";
 import { HeaderDiagram } from "@/components/HeaderDiagram";
 import { SequenceDiagram } from "@/components/SequenceDiagram";
 import { Quiz } from "@/components/Quiz";
+import { NetworkTopology } from "@/components/diagrams/NetworkTopology";
+import { CsmaCdTimeline } from "@/components/diagrams/CsmaCdTimeline";
+import { TcpStateMachine } from "@/components/diagrams/TcpStateMachine";
 
 // Required at the project root for @next/mdx with the App Router. We register
 // the custom content components here so every layer's MDX can use them directly
@@ -23,5 +26,8 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     HeaderDiagram,
     SequenceDiagram,
     Quiz,
+    NetworkTopology,
+    CsmaCdTimeline,
+    TcpStateMachine,
   };
 }
