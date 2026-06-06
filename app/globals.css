@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Dark mode driven by a `.dark` class on <html> (toggled by ThemeToggle). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens (Tailwind v4 CSS-first). Each OSI layer has a signature accent
+ * color used consistently across the stack diagram, nav, and per-layer pages.
+ */
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Menlo, monospace;
+
+  /* Layer accent colors (1 → 7), perceptually spaced via OKLCH. */
+  --color-layer-1: oklch(0.62 0.17 25); /* Physical    — red    */
+  --color-layer-2: oklch(0.68 0.16 55); /* Data Link   — orange */
+  --color-layer-3: oklch(0.72 0.15 130); /* Network     — green  */
+  --color-layer-4: oklch(0.68 0.13 195); /* Transport   — teal   */
+  --color-layer-5: oklch(0.62 0.16 250); /* Session     — blue   */
+  --color-layer-6: oklch(0.58 0.18 300); /* Presentation— violet */
+  --color-layer-7: oklch(0.6 0.19 340); /* Application  — magenta*/
+}
+
+:root {
+  --bg: oklch(0.99 0.003 250);
+  --bg-soft: oklch(0.97 0.005 250);
+  --fg: oklch(0.22 0.02 265);
+  --fg-muted: oklch(0.5 0.02 265);
+  --border: oklch(0.9 0.01 265);
+}
+
+.dark {
+  --bg: oklch(0.18 0.015 265);
+  --bg-soft: oklch(0.22 0.018 265);
+  --fg: oklch(0.93 0.01 250);
+  --fg-muted: oklch(0.7 0.02 250);
+  --border: oklch(0.32 0.02 265);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
