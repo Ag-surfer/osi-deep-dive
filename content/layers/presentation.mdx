@@ -1,16 +1,107 @@
-## The translator
+export const sources = [
+  { label: "RFC 8446 — TLS 1.3", href: "https://www.rfc-editor.org/rfc/rfc8446.html" },
+  { label: "The Unicode Standard", href: "https://www.unicode.org/standard/standard.html" },
+  { label: "RFC 8259 — JSON", href: "https://www.rfc-editor.org/rfc/rfc8259.html" },
+  { label: "ITU-T X.680 — ASN.1", href: "https://www.itu.int/rec/T-REC-X.680" },
+];
 
-The Presentation layer ensures that data sent by one system is **intelligible** to another. It handles
-**syntax and semantics of information**: character encoding (ASCII ↔ Unicode/UTF-8), **serialization**
-of data structures into a common wire format, **compression**, and **encryption/decryption**. It is the
-boundary between application-specific data structures and a neutral on-the-wire representation.
+## The translator between machine and wire
 
-<Callout variant="note" title="A note on the modern stack">
-Like the Session layer, Presentation has no single protocol in TCP/IP. Its jobs are done by formats and
-libraries: **TLS** (encryption), **JPEG/PNG/H.264** (media encoding), **ASN.1**, and **JSON/Protocol
-Buffers** (serialization). We map the OSI concept to these concrete technologies.
+Two machines may represent the same information completely differently — different character sets,
+different byte orders, different struct layouts. The Presentation layer is the **translator**: it
+converts between an application's internal data and a common representation suitable for transmission.
+Its three jobs are **encoding/translation**, **compression**, and **encryption**.
+
+## Character encoding
+
+Text is just numbers, and the mapping matters. **ASCII** (7 bits) covers English; **Unicode** assigns a
+*code point* to every character in every script, and **UTF-8** encodes those code points as 1–4 bytes —
+backward-compatible with ASCII and now dominant on the web. Get the encoding wrong and you get
+**mojibake** (`café` → `cafÃ©`): the bytes were fine, the *interpretation* was not.
+
+<WorkedExample title="How UTF-8 encodes 'é' (U+00E9)">
+The code point `U+00E9` = 233 needs more than 7 bits, so UTF-8 uses a **2-byte** form:
+
+1. Template for 2-byte sequences: `110xxxxx 10xxxxxx` (11 payload bits).
+2. `0xE9` in binary is `000 1110 1001` → pad to 11 bits: `00011 101001`.
+3. Fill the template: `11000011 10101001` = bytes `0xC3 0xA9`.
+
+So `é` travels as two bytes, `C3 A9`. An ASCII-only reader sees two "garbage" bytes — the classic
+encoding-mismatch bug.
+</WorkedExample>
+
+## Serialization
+
+In-memory objects (graphs of pointers) can't be sent as-is; they must be **serialized** into a byte
+stream and **deserialized** on the other side. The format is a Presentation-layer choice with real
+trade-offs:
+
+| Format | Shape | Trade-off |
+| --- | --- | --- |
+| **JSON** | Text, human-readable | Ubiquitous, verbose, no schema by default |
+| **XML** | Text, verbose, schema-rich | Powerful but heavy |
+| **Protocol Buffers** | Binary, schema-first | Compact and fast; needs the schema to read |
+| **ASN.1 (DER)** | Binary, formally specified | Used in X.509 certificates, LDAP, telecom |
+
+## Compression and encryption
+
+- **Compression** shrinks data before it hits the wire — lossless (gzip, Brotli for HTTP; PNG) or
+  lossy (JPEG, H.264, where discarding imperceptible detail buys huge savings).
+- **Encryption** transforms data so only the intended party can read it. **TLS** is the towering
+  example: it negotiates ciphers and keys, then encrypts the application's bytes — confidentiality,
+  integrity, and authentication, sitting exactly where the Presentation layer says encryption belongs.
+
+<Callout variant="insight" title="Why TLS is 'presentation'">
+TLS doesn't care whether it's wrapping HTTP, SMTP, or IMAP — it transforms the *representation* of
+whatever bytes pass through (encrypting them) without understanding their meaning. That representation
+transformation is the essence of Layer 6, even though TLS spans session and presentation concerns.
 </Callout>
 
-<Callout variant="note" title="Full deep-dive in progress">
-The complete treatment is being authored. The at-a-glance facts above are accurate today.
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms at the presentation level">
+- **Mojibake / `?` boxes** — encoding mismatch (declared charset ≠ actual bytes).
+- **Deserialization errors** — schema drift between sender and receiver, or untrusted input parsed
+  unsafely.
+- **Double-compression / wrong content-encoding** — gzip headers mismatched, producing garbage.
+- **Certificate/cipher mismatch** — TLS negotiation fails when client and server share no acceptable
+  cipher suite or the cert chain is broken.
 </Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface at Layer 6">
+- **Insecure deserialization** — parsing untrusted serialized data can execute attacker-controlled
+  code (a top web vulnerability). Defense: validate, use safe formats, never deserialize untrusted
+  input into live objects.
+- **Weak/legacy crypto** — old TLS versions and ciphers (SSLv3, RC4) are broken; enforce TLS 1.2+.
+- **Padding-oracle & compression attacks** (CRIME/BREACH) — combining compression with encryption can
+  leak secrets; mitigated by disabling TLS-level compression and separating secrets from attacker input.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Text shows up as 'cafÃ©' instead of 'café'. What went wrong?",
+      options: [
+        "The data was corrupted in transit",
+        "An encoding mismatch — UTF-8 bytes read as a single-byte charset",
+        "The compression failed",
+      ],
+      answer: 1,
+      explanation: "The bytes are correct UTF-8 (é = C3 A9), but the reader interpreted them as Latin-1, showing two characters. A classic Presentation-layer mismatch.",
+    },
+    {
+      q: "Why is choosing Protocol Buffers over JSON a Presentation-layer decision?",
+      options: [
+        "It changes how packets are routed",
+        "It changes how data is encoded/serialized for the wire",
+        "It changes the TCP window size",
+      ],
+      answer: 1,
+      explanation: "Both carry the same information; they differ in representation (binary+schema vs. text). Picking the encoding is exactly the Presentation layer's job.",
+    },
+  ]}
+/>

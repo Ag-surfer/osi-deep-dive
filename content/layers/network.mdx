@@ -50,6 +50,21 @@ Some ranges are reserved and never routed on the public internet (<RFCRef n={191
 `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16` are **private** address space, reused behind NAT
 in homes and enterprises everywhere.
 
+<WorkedExample title="Splitting 192.0.2.0/24 into four equal subnets">
+You need four isolated subnets from a single `/24` (256 addresses).
+
+1. Four subnets need 2 extra network bits (`2² = 4`), so the prefix grows `/24 → /26`.
+2. Each `/26` block is `2^(32−26) = 64` addresses. Block size = 64.
+3. The subnets are therefore:
+   - `192.0.2.0/26` → hosts `.1–.62`, broadcast `.63`
+   - `192.0.2.64/26` → hosts `.65–.126`, broadcast `.127`
+   - `192.0.2.128/26` → hosts `.129–.190`, broadcast `.191`
+   - `192.0.2.192/26` → hosts `.193–.254`, broadcast `.255`
+4. Usable hosts per subnet = `64 − 2 = 62` (network + broadcast addresses are reserved).
+
+The pattern generalizes: borrow `n` host bits to make `2ⁿ` subnets, each of size `2^(32−prefix)`.
+</WorkedExample>
+
 ## Routing vs. forwarding
 
 These two words are often conflated; the distinction is fundamental.

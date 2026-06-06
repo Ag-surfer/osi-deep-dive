@@ -1,13 +1,142 @@
-## Moving bits as signals
+export const sources = [
+  { label: "IEEE 802.3 — Ethernet", href: "https://standards.ieee.org/ieee/802.3/" },
+  { label: "Shannon, A Mathematical Theory of Communication (1948)", href: "https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf" },
+  { label: "Tanenbaum & Wetherall, Computer Networks, Ch. 2", href: "https://www.pearson.com/" },
+  { label: "RFC 791 / IEEE encoding references for line codes", href: "https://www.rfc-editor.org/" },
+];
 
-The Physical layer is where data stops being an abstraction and becomes **physics**: voltages on
-copper, pulses of light in fiber, modulated radio waves in the air. It defines everything needed to
-put a raw stream of 1s and 0s onto a medium and recover it at the other end — connectors and pinouts,
-signal levels, timing, data rates, and the **line coding** and **modulation** that map bits to
-physical symbols.
+## Where data becomes physics
 
-<Callout variant="note" title="Full deep-dive in progress">
-This layer's complete treatment — line coding (NRZ, Manchester, 4B/5B), modulation, the
-Nyquist and Shannon limits on channel capacity, and media types — is being authored. The
-at-a-glance facts above are accurate today.
+Every byte you send ends its journey down the stack here, at the boundary between information and the
+physical world. The Physical layer's job is brutally concrete: **put a stream of bits onto a medium so
+that the other end recovers exactly the same bits.** It standardizes the mechanical (connectors,
+pinouts), electrical/optical (voltage levels, light wavelengths, power), and timing characteristics —
+plus the two ideas that make digital transmission possible: **line coding** and **modulation**.
+
+<Callout variant="insight" title="The Physical layer has no addresses and no header">
+Unlike every layer above it, Layer 1 adds no header of its own — there is nothing to address, because
+it only moves a raw symbol stream between two endpoints of a single link. Its "vocabulary" is signals,
+not packets.
 </Callout>
+
+## Line coding: turning bits into signals
+
+A naive scheme — "high voltage = 1, low = 0" (**NRZ**, non-return-to-zero) — fails in practice: a long
+run of identical bits gives a constant signal, and without transitions the receiver's clock **drifts**
+and loses count. Line codes solve clock recovery and DC balance:
+
+| Code | Idea | Trade-off |
+| --- | --- | --- |
+| **NRZ** | Level = bit value | Simple, but no self-clocking on long runs |
+| **NRZI** | *Transition* = 1, no transition = 0 | Robust to polarity inversion |
+| **Manchester** | Mid-bit transition encodes value (used in 10BASE-T) | Self-clocking, but needs 2× bandwidth |
+| **4B/5B + MLT-3** | Map 4 data bits → 5 code bits to guarantee transitions | Used in 100BASE-TX; ~80% efficiency |
+| **8b/10b** | 8 bits → 10 symbols, DC-balanced | Used in Gigabit/PCIe/SATA |
+| **PAM-4** | 4 voltage levels carry 2 bits/symbol | Doubles rate (used in 400G+ Ethernet) |
+
+<Callout variant="note" title="Self-clocking is the whole point">
+There is no separate clock wire on Ethernet. The receiver extracts timing **from the data signal
+itself** — which is why guaranteeing frequent transitions (Manchester, 4B/5B, 8b/10b) matters so much.
+</Callout>
+
+## The two fundamental limits
+
+How fast can a channel go? Two theorems bound it.
+
+**Nyquist** (noiseless channel): the maximum symbol rate is `2B` symbols/s for bandwidth `B`. With `M`
+distinguishable signal levels, the data rate is `2B · log₂(M)` bits/s. More levels = more bits/symbol —
+until noise makes them indistinguishable.
+
+**Shannon** (noisy channel): the absolute capacity ceiling is `C = B · log₂(1 + S/N)`, where `S/N` is
+the signal-to-noise ratio. No coding scheme can beat it.
+
+<WorkedExample title="Max data rate of a voice-grade line">
+A telephone channel has bandwidth **B = 3,100 Hz** and SNR of **30 dB**.
+
+1. Convert SNR from dB: `S/N = 10^(30/10) = 1000`.
+2. Shannon capacity: `C = 3100 · log₂(1 + 1000) = 3100 · 9.97 ≈ 30,900 bits/s`.
+
+So ~30 kbps is the theoretical ceiling on a 3.1 kHz, 30 dB line — which is exactly why classic dial-up
+modems plateaued near 33.6 kbps. (56k modems cheated by making the downstream path partly digital,
+sidestepping the analog quantization noise.)
+</WorkedExample>
+
+## What's actually on the wire: preamble and SFD
+
+Before an Ethernet frame's bits arrive, the Physical layer sends a fixed **preamble** so the receiver
+can lock its clock, followed by a **Start Frame Delimiter** that says "the frame begins now."
+
+<HeaderDiagram
+  title="Ethernet preamble + SFD (the first bits of every transmission)"
+  fields={[
+    { name: "Preamble", bits: 56, desc: "Seven bytes of alternating 1010…1010. A steady square wave the receiver uses to synchronize its clock before real data arrives." },
+    { name: "SFD", bits: 8, desc: "Start Frame Delimiter: 10101011. The final '11' breaks the pattern, marking the exact bit where the frame's destination MAC begins." },
+  ]}
+/>
+
+## Media and devices
+
+- **Twisted pair** (Cat 5e/6/6a) — cheap, ubiquitous, up to ~100 m; twisting cancels interference.
+- **Coaxial** — legacy LANs and cable broadband.
+- **Optical fiber** — glass carrying light; **single-mode** for long haul (km), **multi-mode** for
+  short reach. Immune to EMI, enormous bandwidth.
+- **Wireless** — modulated RF; the "medium" is shared space, which pushes complexity up to the MAC.
+
+Pure Layer-1 devices are "dumb": **repeaters** regenerate a degraded signal, and **hubs** are
+multi-port repeaters that blindly copy bits to every port (one collision domain — which is why they're
+obsolete, replaced by Layer-2 switches).
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="When the problem is physical">
+- **No link light** — broken cable, wrong pinout, or unpowered transceiver. Start here before
+  debugging anything higher.
+- **High CRC/frame errors** — marginal cabling, EMI, exceeding the distance limit, or a duplex
+  mismatch. Bits are flipping on the wire.
+- **Attenuation & noise** — signal weakens over distance; beyond spec the SNR drops below what the
+  line code can recover.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface at Layer 1">
+- **Wiretapping / fiber tapping** — copper radiates and can be inductively tapped; even fiber can be
+  bent to leak light. Defense is encryption at higher layers (you must assume the medium is hostile).
+- **Jamming** — flooding a wireless channel with RF energy denies service; hard to stop, possible to
+  locate.
+- **Physical access** — an unsecured port or patch panel is a foothold. Port security and locked
+  facilities are Layer-1 controls.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why does 10BASE-T use Manchester encoding instead of plain NRZ?",
+      options: [
+        "It uses less bandwidth",
+        "Its guaranteed mid-bit transition lets the receiver recover the clock",
+        "It supports more voltage levels",
+      ],
+      answer: 1,
+      explanation: "Manchester guarantees a transition every bit, so the receiver stays clock-synchronized even on long runs of identical bits — at the cost of needing twice the bandwidth.",
+    },
+    {
+      q: "A channel has 4 kHz bandwidth and an SNR of 1023. Roughly what is its Shannon capacity?",
+      options: ["~4 kbps", "~40 kbps", "~400 kbps"],
+      answer: 1,
+      explanation: "C = 4000 · log₂(1 + 1023) = 4000 · 10 = 40,000 bps ≈ 40 kbps.",
+    },
+    {
+      q: "What does a network hub do that a switch does not?",
+      options: [
+        "Forwards frames only to the correct port",
+        "Blindly repeats incoming bits to every other port",
+        "Performs IP routing",
+      ],
+      answer: 1,
+      explanation: "A hub is a Layer-1 repeater: it copies bits to all ports, creating one big collision domain. A switch is a Layer-2 device that forwards selectively by MAC address.",
+    },
+  ]}
+/>

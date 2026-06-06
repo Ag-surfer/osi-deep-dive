@@ -3,7 +3,9 @@ import { Callout } from "@/components/content/Callout";
 import { Figure } from "@/components/content/Figure";
 import { ProtocolTable } from "@/components/content/ProtocolTable";
 import { RFCRef, KeyTerm } from "@/components/content/Inline";
+import { WorkedExample } from "@/components/content/WorkedExample";
 import { HeaderDiagram } from "@/components/HeaderDiagram";
+import { SequenceDiagram } from "@/components/SequenceDiagram";
 import { Quiz } from "@/components/Quiz";
 
 // Required at the project root for @next/mdx with the App Router. We register
@@ -17,7 +19,9 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     ProtocolTable,
     RFCRef,
     KeyTerm,
+    WorkedExample,
     HeaderDiagram,
+    SequenceDiagram,
     Quiz,
   };
 }

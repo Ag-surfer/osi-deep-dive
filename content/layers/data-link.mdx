@@ -1,12 +1,158 @@
-## Framing and node-to-node delivery
+export const sources = [
+  { label: "IEEE 802.3 — Ethernet", href: "https://standards.ieee.org/ieee/802.3/" },
+  { label: "IEEE 802.1Q — VLAN tagging", href: "https://standards.ieee.org/ieee/802.1Q/" },
+  { label: "RFC 826 — Address Resolution Protocol (ARP)", href: "https://www.rfc-editor.org/rfc/rfc826.html" },
+  { label: "RFC 894 — IP over Ethernet", href: "https://www.rfc-editor.org/rfc/rfc894.html" },
+];
 
-The Data Link layer turns the Physical layer's raw bit pipe into something usable: it groups bits into
-**frames**, delimits where each frame begins and ends, addresses them with **MAC addresses**, detects
-corruption with a **frame check sequence (CRC)**, and on shared media decides **who gets to transmit**.
-It is split into two sublayers — **LLC** (logical link control) and **MAC** (media access control).
+## From a bit pipe to a usable link
 
-<Callout variant="note" title="Full deep-dive in progress">
-The complete treatment — the Ethernet frame format (byte-accurate), MAC addressing, CSMA/CD vs.
-CSMA/CA, switching and the forwarding table, VLANs, and ARP's role — is being authored. The
-at-a-glance facts above are accurate today.
+The Physical layer hands up an unstructured stream of bits — no boundaries, no addressing, no error
+checking. The Data Link layer makes that stream usable on a single link. It **frames** the bits (marks
+where messages start and end), **addresses** them with MAC addresses so the right NIC picks them up,
+**detects corruption** with a checksum, and on shared media **arbitrates** who may transmit. It is
+split into two sublayers: **LLC** (multiplexing upper protocols) and **MAC** (addressing + media
+access).
+
+## MAC addresses
+
+A MAC address is **48 bits**, written as six hex bytes (`a4:5e:60:1f:cd:02`). The top 24 bits are an
+**OUI** assigned to the manufacturer; the bottom 24 identify the specific NIC. Two bits in the first
+byte are special: the **I/G bit** (individual vs. group/multicast) and the **U/L bit** (universally vs.
+locally administered). The all-ones address `ff:ff:ff:ff:ff:ff` is the **broadcast** — every NIC on the
+segment accepts it.
+
+<Callout variant="insight" title="MAC is flat; IP is hierarchical">
+A MAC address says *who* a NIC is, not *where* it is — there's no structure to aggregate or route on.
+That's why it only works within one link/broadcast domain, and why the Network layer's hierarchical IP
+addressing is needed to cross between networks.
 </Callout>
+
+## The Ethernet frame, field by field
+
+<HeaderDiagram
+  title="Ethernet II frame (IEEE 802.3) — header + trailer around the payload"
+  fields={[
+    { name: "Destination MAC", bits: 48, desc: "Hardware address of the receiving NIC on this segment (or broadcast/multicast)." },
+    { name: "Source MAC", bits: 48, desc: "Hardware address of the sending NIC." },
+    { name: "EtherType / Length", bits: 16, desc: "≥ 0x0600 (1536) names the upper protocol — 0x0800 = IPv4, 0x0806 = ARP, 0x86DD = IPv6. ≤ 1500 instead means payload length (802.3)." },
+    { name: "Payload", bits: 96, desc: "The encapsulated packet, 46–1500 bytes. Below 46 it is padded so the frame meets the 64-byte minimum.", variable: true },
+    { name: "FCS", bits: 32, desc: "Frame Check Sequence: a CRC-32 over the frame. If it doesn't match on receipt, the frame is silently dropped — the Data Link layer detects errors but does not correct them." },
+  ]}
+/>
+
+<Callout variant="note" title="VLAN tag (802.1Q)">
+A 4-byte **802.1Q tag** can be inserted right after the Source MAC to mark a frame's **VLAN** (a
+virtual LAN that segments one physical switch into isolated broadcast domains). It carries a 12-bit
+VLAN ID (4094 usable) and a 3-bit priority (QoS).
+</Callout>
+
+## Media access control: who transmits when?
+
+On a shared medium, two stations transmitting at once **collide**. Two classic strategies:
+
+- **CSMA/CD** (classic half-duplex Ethernet): *Carrier Sense Multiple Access with Collision
+  Detection*. Listen first; if idle, transmit while still listening. If you detect a collision, send a
+  **jam** signal and back off a random time (binary exponential backoff) before retrying.
+- **CSMA/CA** (Wi-Fi): you **cannot** reliably detect collisions on radio, so 802.11 tries to *avoid*
+  them — random backoff before sending, and optional RTS/CTS reservation.
+
+<Callout variant="history" title="Why collisions are now history">
+Modern switched, full-duplex Ethernet gives every device its own dedicated collision-free link.
+CSMA/CD is effectively a museum piece on wired LANs — but it's the reason Ethernet scaled, and the
+ideas live on in Wi-Fi's CSMA/CA.
+</Callout>
+
+<WorkedExample title="On-the-wire efficiency of a minimum-size frame">
+Ethernet enforces a **64-byte minimum frame** (so collisions are detectable), and between frames the
+medium needs an **8-byte preamble/SFD** plus a **12-byte inter-frame gap**.
+
+1. A minimum frame carries only **46 bytes** of payload (18 bytes are header + FCS).
+2. Total bytes occupied on the wire: `64 + 8 + 12 = 84` bytes.
+3. Efficiency = `46 / 84 ≈ 55%`.
+
+So tiny packets waste nearly half the wire. A **maximum** 1500-byte payload (1518-byte frame) gives
+`1500 / (1518 + 20) ≈ 97.5%` — which is why bulk transfers love big frames (and why "jumbo frames"
+exist).
+</WorkedExample>
+
+## Switching and ARP
+
+A **switch** is the defining Layer-2 device. It **learns**: when a frame arrives, it records
+`source MAC → port` in its **CAM/forwarding table**. To forward, it looks up the destination MAC and
+sends the frame out only that one port (unknown destinations are **flooded** to all ports). This
+confines traffic and gives each link its own collision domain. Loops between switches are broken by
+the **Spanning Tree Protocol (STP)**.
+
+When a host knows a destination's **IP** but needs its **MAC** to build a frame, it uses **ARP**
+(<RFCRef n={826} />) — the glue between Layer 3 and Layer 2:
+
+<SequenceDiagram
+  actors={["Host A", "LAN (broadcast)", "Host B"]}
+  steps={[
+    { from: 0, to: 1, label: "ARP Request: who has 192.0.2.5? (broadcast)" },
+    { from: 1, to: 2, label: "flooded to all hosts" },
+    { from: 2, to: 0, label: "ARP Reply: 192.0.2.5 is at a4:5e:60:… (unicast)", dashed: true },
+  ]}
+  caption="ARP resolves an IP address to a MAC address before the first frame can be sent."
+/>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms at Layer 2">
+- **Broadcast storm** — a switching loop with no/failed STP; broadcasts multiply until the LAN melts.
+- **MAC flapping** — the same MAC seen on two ports (a loop or a duplicated address); the table churns.
+- **Duplex mismatch** — one side full-, one side half-duplex → late collisions and miserable
+  throughput that *looks* like a Physical problem.
+- **VLAN misconfig** — a host in the wrong VLAN can reach nothing beyond its (empty) broadcast domain.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface at Layer 2">
+- **ARP spoofing/poisoning** — ARP has no authentication; an attacker answers ARP requests with its own
+  MAC to become a man-in-the-middle. Defense: **Dynamic ARP Inspection**, static ARP for critical hosts.
+- **MAC flooding (CAM overflow)** — flood bogus source MACs until the switch table overflows and the
+  switch fails open, flooding all traffic (so the attacker can sniff). Defense: **port security**.
+- **VLAN hopping** — abusing trunk negotiation or double-tagging to reach other VLANs. Defense: disable
+  DTP, prune trunks, avoid the native VLAN.
+- **Rogue DHCP / 802.1X** — port-based network access control (802.1X) authenticates devices before
+  granting link access.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "A switch receives a frame for a destination MAC not in its table. What does it do?",
+      options: [
+        "Drops the frame",
+        "Floods it out every port except the one it arrived on",
+        "Sends an ARP request",
+      ],
+      answer: 1,
+      explanation: "Unknown-unicast frames are flooded to all other ports. When the destination replies, the switch learns its port and stops flooding for it.",
+    },
+    {
+      q: "What does the FCS field let the Data Link layer do?",
+      options: [
+        "Correct bit errors in the frame",
+        "Detect (not correct) corruption, dropping bad frames",
+        "Route the frame to another network",
+      ],
+      answer: 1,
+      explanation: "The FCS is a CRC-32 used for error detection. A frame failing the check is silently discarded; recovery is left to higher layers.",
+    },
+    {
+      q: "Why is ARP a security weak point?",
+      options: [
+        "It encrypts traffic incorrectly",
+        "It has no authentication, so any host can claim any IP→MAC mapping",
+        "It only works over IPv6",
+      ],
+      answer: 1,
+      explanation: "ARP replies are trusted blindly, so an attacker can poison caches and intercept traffic (MITM). Dynamic ARP Inspection mitigates it.",
+    },
+  ]}
+/>

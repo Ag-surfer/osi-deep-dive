@@ -1,13 +1,165 @@
-## Process-to-process delivery
+export const sources = [
+  { label: "RFC 9293 — Transmission Control Protocol (TCP)", href: "https://www.rfc-editor.org/rfc/rfc9293.html" },
+  { label: "RFC 768 — User Datagram Protocol (UDP)", href: "https://www.rfc-editor.org/rfc/rfc768.html" },
+  { label: "RFC 5681 — TCP Congestion Control", href: "https://www.rfc-editor.org/rfc/rfc5681.html" },
+  { label: "RFC 9000 — QUIC", href: "https://www.rfc-editor.org/rfc/rfc9000.html" },
+];
 
-The Transport layer connects not just hosts but **the specific programs running on them**, using
-**port numbers** to multiplex many conversations over one IP address. It offers two contrasting
-contracts: **TCP** — connection-oriented, reliable, ordered, flow- and congestion-controlled — and
-**UDP** — a thin, fast, connectionless datagram service. This is where the internet's reliability
-actually lives, by design (the end-to-end principle).
+## Connecting processes, not just hosts
 
-<Callout variant="note" title="Full deep-dive in progress">
-The complete treatment — the TCP three-way handshake, the TCP segment header (byte-accurate),
-sequence/acknowledgment numbers, flow control (sliding window) vs. congestion control (slow start,
-AIMD), and TCP vs. UDP vs. QUIC — is being authored. The at-a-glance facts above are accurate today.
+The Network layer gets a packet to the right **host**. But a host runs dozens of programs at once — a
+browser, a mail client, SSH. The Transport layer delivers data to the right **process** using **port
+numbers**, and chooses the *contract*: TCP's reliable ordered stream, or UDP's bare datagram. This is
+where the **end-to-end principle** pays off — reliability lives at the edges, so the network core stays
+simple.
+
+## Ports and multiplexing
+
+A port is a 16-bit number (0–65535). A connection is identified by the **4-tuple**
+`(source IP, source port, dest IP, dest port)` — which is how your machine keeps hundreds of
+simultaneous connections straight. Ports below 1024 are **well-known** (80 = HTTP, 443 = HTTPS,
+22 = SSH, 53 = DNS); clients pick high **ephemeral** ports.
+
+## TCP: the reliable ordered stream
+
+TCP turns IP's lossy, unordered, best-effort packets into a **reliable, in-order byte stream**. It adds
+connection setup, sequence numbers, acknowledgments and retransmission, **flow control**, and
+**congestion control**.
+
+<HeaderDiagram
+  title="TCP segment header (RFC 9293) — 20 bytes minimum"
+  fields={[
+    { name: "Source Port", bits: 16, desc: "Sending process's port." },
+    { name: "Destination Port", bits: 16, desc: "Receiving process's port." },
+    { name: "Sequence Number", bits: 32, desc: "Byte-offset of this segment's first data byte in the stream. How TCP orders data and detects loss." },
+    { name: "Acknowledgment Number", bits: 32, desc: "Next byte the sender expects to receive — cumulative acknowledgment of everything before it." },
+    { name: "Data Offset", bits: 4, desc: "Header length in 32-bit words (≥5); tells where data begins after any options." },
+    { name: "Reserved", bits: 4, desc: "Reserved bits (historically includes flag space); sent as zero." },
+    { name: "Flags", bits: 8, desc: "Control bits: SYN (open), ACK (acknowledgment valid), FIN (close), RST (reset/abort), PSH (push to app), URG, plus ECE/CWR for ECN." },
+    { name: "Window Size", bits: 16, desc: "Flow control: how many more bytes the receiver can buffer right now. The advertised receive window." },
+    { name: "Checksum", bits: 16, desc: "Covers header, data, and a pseudo-header of IP fields — detects corruption end to end." },
+    { name: "Urgent Pointer", bits: 16, desc: "With URG set, marks the end of urgent data. Rarely used." },
+    { name: "Options", bits: 32, desc: "MSS, window scaling, SACK, timestamps — negotiated in the handshake. Variable length, padded to 32 bits.", variable: true },
+  ]}
+/>
+
+### The three-way handshake
+
+Before any data, TCP synchronizes sequence numbers in three messages:
+
+<SequenceDiagram
+  actors={["Client", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "SYN  seq = x" },
+    { from: 1, to: 0, label: "SYN-ACK  seq = y, ack = x+1", dashed: true },
+    { from: 0, to: 1, label: "ACK  ack = y+1" },
+  ]}
+  caption="Each side learns the other's initial sequence number; after the third packet the connection is established."
+/>
+
+Closing is a symmetric **four-way** exchange (FIN/ACK in each direction), since each side shuts down its
+half of the stream independently.
+
+### Flow control vs. congestion control
+
+Two different problems, often confused:
+
+- **Flow control** protects the *receiver* from being overrun — the advertised **Window Size** says
+  "send at most this much more." A sliding window.
+- **Congestion control** protects the *network* from overload — TCP maintains its own *congestion
+  window* and ramps carefully: **slow start** (exponential growth) until a threshold, then **congestion
+  avoidance** (linear growth), halving on loss (**AIMD** — additive increase, multiplicative decrease).
+  **Fast retransmit/recovery** reacts to three duplicate ACKs without waiting for a timeout.
+
+<WorkedExample title="Window needed to fill a fast, long link">
+Throughput on TCP is bounded by `window / RTT`. To saturate a **100 Mbps** path with an **80 ms** RTT:
+
+1. Bandwidth-delay product (BDP) = `100×10⁶ bits/s × 0.080 s = 8×10⁶ bits = 1 MB`.
+2. So the sender needs ~**1 MB of data in flight** to keep the pipe full.
+3. The original TCP window field maxes at 65,535 bytes — far too small. The **window scaling** option
+   (negotiated in the handshake) multiplies it so modern stacks can reach the needed 1 MB.
+
+This is why a high-bandwidth, high-latency link ("long fat network") performs poorly without window
+scaling: a tiny window throttles throughput regardless of available bandwidth.
+</WorkedExample>
+
+## UDP: thin and fast
+
+<RFCRef n={768}>UDP</RFCRef> adds almost nothing to IP — just ports and a checksum — in an **8-byte**
+header. No handshake, no ordering, no retransmission. That's a feature for DNS lookups, real-time
+audio/video, and gaming, where a late packet is worse than a lost one.
+
+<HeaderDiagram
+  title="UDP header (RFC 768) — 8 bytes"
+  fields={[
+    { name: "Source Port", bits: 16, desc: "Sending port (optional in UDP; may be 0)." },
+    { name: "Destination Port", bits: 16, desc: "Receiving port." },
+    { name: "Length", bits: 16, desc: "Length of header + data in bytes." },
+    { name: "Checksum", bits: 16, desc: "Optional in IPv4, mandatory in IPv6; covers header, data, and IP pseudo-header." },
+  ]}
+/>
+
+<Callout variant="insight" title="QUIC: the best of both">
+**QUIC** (<RFCRef n={9000} />, the basis of HTTP/3) runs reliability, ordering, and congestion control
+*over UDP* in user space — adding TLS 1.3 and eliminating head-of-line blocking between streams. It's
+Transport-layer logic that sidesteps the ossified TCP path through the internet.
 </Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms at Layer 4">
+- **Ephemeral port exhaustion** — a busy proxy runs out of source ports for new connections; you see
+  connection failures under load.
+- **TIME_WAIT pileup** — many short connections leave sockets lingering; tune reuse rather than disabling.
+- **Throughput capped far below link rate** — often a small window on a high-BDP path (enable window
+  scaling), or persistent loss forcing congestion-window collapse.
+- **Connection resets (RST)** — the peer refused or aborted; distinguish from silent drops (firewall).
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface at Layer 4">
+- **SYN flood** — send SYNs, never complete the handshake, exhausting the server's half-open
+  connection table (DoS). Defense: **SYN cookies**.
+- **TCP RST/sequence injection** — forging a RST or data with a guessed sequence number to hijack or
+  tear down a session. Defense: randomized initial sequence numbers, and encryption (TLS) above.
+- **Port scanning** — probing which ports are open to map services. Defense: firewalls, rate limiting.
+- **Off-path attacks** — mitigated by the 4-tuple + random ports/ISNs raising the guessing difficulty.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "After the SYN and SYN-ACK, what does the client's final ACK accomplish?",
+      options: [
+        "It transfers the first data byte",
+        "It acknowledges the server's sequence number, completing the handshake",
+        "It closes the connection",
+      ],
+      answer: 1,
+      explanation: "The three-way handshake synchronizes both initial sequence numbers. The final ACK confirms the server's ISN; only then is the connection established.",
+    },
+    {
+      q: "Flow control and congestion control protect, respectively:",
+      options: [
+        "The network and the receiver",
+        "The receiver and the network",
+        "The sender and the receiver",
+      ],
+      answer: 1,
+      explanation: "Flow control (advertised window) keeps the sender from overrunning the receiver's buffer; congestion control (congestion window) keeps senders from overrunning the network.",
+    },
+    {
+      q: "Why might a 1 Gbps, 100 ms-RTT link deliver poor TCP throughput without window scaling?",
+      options: [
+        "The checksum is too weak",
+        "The BDP (~12.5 MB) far exceeds the 64 KB base window, throttling data in flight",
+        "UDP is faster",
+      ],
+      answer: 1,
+      explanation: "Throughput ≈ window/RTT. With only 64 KB in flight over a 100 ms RTT you cap near 5 Mbps. Window scaling lets the window grow to the BDP so the pipe stays full.",
+    },
+  ]}
+/>
