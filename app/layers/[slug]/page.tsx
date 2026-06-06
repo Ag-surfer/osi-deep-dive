@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { LAYERS, getLayer } from "@/lib/layers";
+import { pageMetadata } from "@/lib/site";
 import { LayerHero } from "@/components/LayerHero";
 import { PrevNext } from "@/components/PrevNext";
 
@@ -18,10 +19,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const layer = getLayer(slug);
   if (!layer) return {};
-  return {
+  return pageMetadata({
     title: `${layer.name} Layer`,
     description: layer.summary,
-  };
+    path: `/layers/${layer.slug}/`,
+  });
 }
 
 interface Source {

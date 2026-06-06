@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { PacketJourney } from "@/components/PacketJourney";
 import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "A Packet's Journey",
   description:
     "Follow a single web request end-to-end through all seven OSI layers — encapsulation down the sender's stack, routing across the network, and de-encapsulation up the receiver's.",
-};
+  path: "/journey/",
+});
 
 export default function JourneyPage() {
   return (

@@ -3,14 +3,42 @@ import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { themeInitScript } from "@/components/ThemeToggle";
+import { SITE_URL, SITE_NAME, SITE_TAGLINE, SITE_DESCRIPTION } from "@/lib/site";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "The OSI Model — A Deep Dive",
-    template: "%s · The OSI Model",
+    default: `${SITE_TAGLINE} — ${SITE_NAME}`,
+    template: `%s · ${SITE_NAME}`,
   },
-  description:
-    "A deep, MIT/Berkeley-grade reference for the OSI model — one in-depth page per layer, with diagrams, bit-level header breakdowns, security, and interactive visualizations.",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "OSI model",
+    "networking",
+    "TCP/IP",
+    "network layers",
+    "data link layer",
+    "transport layer",
+    "computer networks",
+    "how the internet works",
+  ],
+  authors: [{ name: SITE_NAME }],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: `${SITE_TAGLINE} — ${SITE_NAME}`,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    images: [{ url: `${SITE_URL}/og.png`, width: 1200, height: 630, alt: SITE_NAME }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_TAGLINE} — ${SITE_NAME}`,
+    description: SITE_DESCRIPTION,
+    images: [`${SITE_URL}/og.png`],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

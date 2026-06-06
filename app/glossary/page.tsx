@@ -1,11 +1,12 @@
-import type { Metadata } from "next";
 import { GlossaryList } from "@/components/GlossaryList";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "Glossary & RFC Index",
   description:
     "Definitions of key networking terms across all seven OSI layers, plus an index of the RFCs and standards referenced throughout.",
-};
+  path: "/glossary/",
+});
 
 const RFCS: { n: string; title: string; layer: string }[] = [
   { n: "791", title: "Internet Protocol (IPv4)", layer: "L3" },
