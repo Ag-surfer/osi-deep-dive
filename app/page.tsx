@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LayerStack } from "@/components/LayerStack";
 import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
+import { OsiTcpIpMap } from "@/components/OsiTcpIpMap";
 
 export default function Home() {
   return (
@@ -61,6 +62,21 @@ export default function Home() {
         <div className="mt-5">
           <EncapsulationVisualizer />
         </div>
+      </section>
+
+      {/* OSI vs TCP/IP */}
+      <section className="mt-16 grid items-center gap-8 sm:grid-cols-2">
+        <div>
+          <h2 className="font-serif text-2xl font-semibold">Theory vs. the real internet</h2>
+          <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+            The OSI model is the teaching framework, but the internet actually runs on the leaner{" "}
+            <strong>TCP/IP model</strong>, which collapses seven layers into four. OSI&rsquo;s top
+            three layers (Application, Presentation, Session) map to a single TCP/IP Application
+            layer; its bottom two fold into the Link layer. Learn OSI for the concepts, recognize
+            TCP/IP in practice.
+          </p>
+        </div>
+        <OsiTcpIpMap />
       </section>
 
       {/* How to use */}
