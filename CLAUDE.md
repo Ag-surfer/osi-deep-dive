@@ -8,6 +8,18 @@ A statically-exported Next.js 16 educational site about the OSI model, deployed 
 The **build is part of the gate** because static-export errors (e.g. a dynamic route missing
 `generateStaticParams`) only surface at `next build`.
 
+## Performance budget
+
+A Lighthouse budget guards perf/a11y/SEO and bundle size. Config in `lighthouserc.json`;
+enforced in CI by `.github/workflows/lighthouse.yml` on every push/PR (fails on regression).
+
+- Run locally: `CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")" npm run perf`
+  (rebuilds with an empty basePath, serves the gzip'd export via `scripts/perf-server.mjs`, runs Lighthouse).
+- Current baseline: **Performance 98-99, Accessibility 100, Best-Practices 100, SEO 100**; JS ~185 KB,
+  total ~260 KB per page. Thresholds: perf ≥ 0.85, a11y/bp/seo ≥ 0.95, script ≤ 280 KB, total ≤ 440 KB,
+  CLS ≤ 0.1. Sizes are measured **gzipped** (Pages serves compressed) — a plain static server
+  over-reports and tanks the score, hence the custom gzip server.
+
 ## Architecture
 
 - `lib/layers.ts` is the **single source of truth** — nav, stack, routing (`generateStaticParams`),

@@ -14,7 +14,7 @@ interface Stage {
 }
 
 const COLOR: Record<Kind, string> = {
-  data: "var(--fg-muted)",
+  data: "var(--bg-soft)",
   l4: "var(--color-layer-4)",
   l3: "var(--color-layer-3)",
   l2: "var(--color-layer-2)",
@@ -106,7 +106,7 @@ export function EncapsulationVisualizer() {
                 className="flex items-center gap-2 rounded px-2 py-1 text-sm transition-colors"
                 style={{
                   backgroundColor: active ? "var(--bg-soft)" : "transparent",
-                  opacity: active ? 1 : 0.5,
+                  opacity: active ? 1 : 0.62,
                 }}
               >
                 <span

@@ -8,8 +8,8 @@ export function WorkedExample({ title, children }: { title: string; children: Re
       style={{ borderColor: "var(--color-layer-4)", backgroundColor: "var(--bg-soft)" }}
     >
       <p
-        className="flex items-center gap-2 rounded-t-lg px-4 py-2 text-sm font-semibold text-white"
-        style={{ backgroundColor: "var(--color-layer-4)" }}
+        className="flex items-center gap-2 rounded-t-lg px-4 py-2 text-sm font-semibold"
+        style={{ backgroundColor: "var(--color-layer-4)", color: "var(--on-accent)" }}
       >
         <span aria-hidden>∑</span> Worked example: {title}
       </p>

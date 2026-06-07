@@ -17,7 +17,8 @@
     "format:fix": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm run format && npm run test && npm run build"
+    "check": "npm run typecheck && npm run lint && npm run format && npm run test && npm run build",
+    "perf": "GITHUB_REPOSITORY= next build && lhci autorun"
   },
   "dependencies": {
     "next": "^16.2.7",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
+    "@lhci/cli": "^0.15.1",
     "@mdx-js/loader": "^3.1.1",
     "@mdx-js/react": "^3.1.1",
     "@next/mdx": "^16.2.7",

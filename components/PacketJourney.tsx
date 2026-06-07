@@ -109,7 +109,7 @@ export function PacketJourney() {
         aria-live="polite"
       >
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="font-serif text-lg font-semibold">{step.title}</h3>
+          <p className="font-serif text-lg font-semibold">{step.title}</p>
           <span className="shrink-0 font-mono text-xs" style={{ color: "var(--fg-muted)" }}>
             {i + 1} / {STEPS.length}
           </span>
@@ -167,7 +167,7 @@ function Stack({ side, active, label }: { side: Side; active: Step; label: strin
               style={{
                 backgroundColor: on ? "var(--bg-soft)" : "transparent",
                 outline: on ? `2px solid ${l.color}` : "none",
-                opacity: on ? 1 : 0.45,
+                opacity: on ? 1 : 0.62,
               }}
             >
               <span
