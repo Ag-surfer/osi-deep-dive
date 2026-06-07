@@ -10,7 +10,8 @@
         "http://localhost:9009/layers/network/",
         "http://localhost:9009/layers/transport/",
         "http://localhost:9009/journey/",
-        "http://localhost:9009/glossary/"
+        "http://localhost:9009/glossary/",
+        "http://localhost:9009/quiz/"
       ],
       "numberOfRuns": 1
     },

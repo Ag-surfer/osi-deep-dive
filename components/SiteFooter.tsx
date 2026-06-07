@@ -23,6 +23,9 @@ export function SiteFooter() {
             <Link href="/glossary/" className="hover:text-[var(--fg)]">
               Glossary
             </Link>
+            <Link href="/quiz/" className="hover:text-[var(--fg)]">
+              Quiz
+            </Link>
           </nav>
         </div>
         <p className="mt-4 text-xs">

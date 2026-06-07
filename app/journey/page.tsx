@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PacketJourney } from "@/components/PacketJourney";
 import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
 import { pageMetadata } from "@/lib/site";
@@ -41,6 +42,29 @@ export default function JourneyPage() {
         <div className="mt-4">
           <EncapsulationVisualizer />
         </div>
+      </section>
+
+      <section
+        className="mt-14 rounded-lg border p-6 text-center"
+        style={{ borderColor: "var(--border)" }}
+      >
+        <h2 className="font-serif text-xl font-semibold">
+          Think you&rsquo;ve got the whole stack?
+        </h2>
+        <p
+          className="mx-auto mt-2 max-w-xl text-sm leading-relaxed"
+          style={{ color: "var(--fg-muted)" }}
+        >
+          Put it to the test with a cross-layer final exam — twelve questions spanning all seven
+          layers and the ideas that connect them.
+        </p>
+        <Link
+          href="/quiz/"
+          className="mt-5 inline-block rounded-md px-5 py-2.5 text-sm font-semibold"
+          style={{ backgroundColor: "var(--color-layer-3)", color: "var(--on-accent)" }}
+        >
+          Take the final quiz →
+        </Link>
       </section>
     </main>
   );

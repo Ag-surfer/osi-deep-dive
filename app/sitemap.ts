@@ -5,7 +5,13 @@ import { SITE_URL } from "@/lib/site";
 export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const paths = ["/", "/journey/", "/glossary/", ...LAYERS.map((l) => `/layers/${l.slug}/`)];
+  const paths = [
+    "/",
+    "/journey/",
+    "/glossary/",
+    "/quiz/",
+    ...LAYERS.map((l) => `/layers/${l.slug}/`),
+  ];
   return paths.map((path) => ({
     url: `${SITE_URL}${path}`,
     changeFrequency: "monthly",

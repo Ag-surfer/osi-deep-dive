@@ -9,6 +9,7 @@ const TOP = [
   { href: "/", label: "Home" },
   { href: "/journey/", label: "Packet Journey" },
   { href: "/glossary/", label: "Glossary & RFCs" },
+  { href: "/quiz/", label: "Final Quiz" },
 ];
 
 /** Hamburger menu for small screens (the desktop nav is hidden below `sm`). */

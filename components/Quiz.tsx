@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 export interface QuizQuestion {
   q: string;
@@ -23,18 +23,38 @@ export function Quiz({ questions }: { questions: QuizQuestion[] }) {
   );
 }
 
-function QuestionCard({ index, question }: { index: number; question: QuizQuestion }) {
+/**
+ * A single interactive question. Reused by both the per-layer `Quiz` and the
+ * cross-layer final quiz: `tag` shows a layer badge, `onAnswer` reports the result
+ * up for scoring, and `allowReset` hides the per-question reset in exam mode.
+ */
+export function QuestionCard({
+  index,
+  question,
+  tag,
+  onAnswer,
+  allowReset = true,
+}: {
+  index: number;
+  question: QuizQuestion;
+  tag?: ReactNode;
+  onAnswer?: (correct: boolean) => void;
+  allowReset?: boolean;
+}) {
   const [picked, setPicked] = useState<number | null>(null);
   const answered = picked !== null;
 
   return (
     <div className="rounded-lg border p-4" style={{ borderColor: "var(--border)" }}>
-      <p className="font-medium">
-        <span className="font-mono text-sm" style={{ color: "var(--fg-muted)" }}>
-          Q{index + 1}.
-        </span>{" "}
-        {question.q}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-medium">
+          <span className="font-mono text-sm" style={{ color: "var(--fg-muted)" }}>
+            Q{index + 1}.
+          </span>{" "}
+          {question.q}
+        </p>
+        {tag ? <div className="shrink-0">{tag}</div> : null}
+      </div>
       <ul className="mt-3 space-y-2">
         {question.options.map((opt, oi) => {
           const isCorrect = oi === question.answer;
@@ -53,7 +73,10 @@ function QuestionCard({ index, question }: { index: number; question: QuizQuesti
               <button
                 type="button"
                 disabled={answered}
-                onClick={() => setPicked(oi)}
+                onClick={() => {
+                  setPicked(oi);
+                  onAnswer?.(oi === question.answer);
+                }}
                 className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:cursor-default"
                 style={{ backgroundColor: bg, borderColor: border }}
               >
@@ -92,14 +115,16 @@ function QuestionCard({ index, question }: { index: number; question: QuizQuesti
               {question.explanation}
             </p>
           ) : null}
-          <button
-            type="button"
-            onClick={() => setPicked(null)}
-            className="mt-2 text-xs underline underline-offset-2"
-            style={{ color: "var(--fg-muted)" }}
-          >
-            Reset
-          </button>
+          {allowReset ? (
+            <button
+              type="button"
+              onClick={() => setPicked(null)}
+              className="mt-2 text-xs underline underline-offset-2"
+              style={{ color: "var(--fg-muted)" }}
+            >
+              Reset
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

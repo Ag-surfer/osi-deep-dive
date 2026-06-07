@@ -7,6 +7,7 @@ const NAV = [
   { href: "/layers/physical/", label: "Layers" },
   { href: "/journey/", label: "Packet Journey" },
   { href: "/glossary/", label: "Glossary" },
+  { href: "/quiz/", label: "Quiz" },
 ];
 
 export function SiteHeader() {
