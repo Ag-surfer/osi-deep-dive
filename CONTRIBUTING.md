@@ -8,9 +8,9 @@ are very welcome — especially anything that makes the content **more accurate*
 1. **Accuracy is the product.** Technical claims — especially header field layouts and protocol
    behavior — must be backed by a primary source (an RFC, an IEEE standard, or a standard textbook).
    Cite it in the layer's `sources` export.
-2. **Keep the gate green.** Before opening a PR, run:
+2. **Keep the gate green.** This project uses **pnpm**. Before opening a PR, run:
    ```bash
-   npm run check        # typecheck + lint + format + test + build
+   pnpm check           # typecheck + lint + format + test + build
    ```
    A red gate will not be merged.
 3. **Match the house style.** Follow the existing structure of a layer page (problem → mechanism →

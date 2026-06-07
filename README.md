@@ -28,9 +28,11 @@ program.
 
 ## Local development
 
+This project uses **[pnpm](https://pnpm.io)** (see [Tooling & supply-chain](#tooling--supply-chain) for why).
+
 ```bash
-npm install
-npm run dev          # http://localhost:3000
+pnpm install
+pnpm dev             # http://localhost:3000
 ```
 
 ### Quality gate
@@ -38,10 +40,23 @@ npm run dev          # http://localhost:3000
 A single command runs the whole gate (and must be green before merging):
 
 ```bash
-npm run check        # typecheck + lint + format + test + static-export build
+pnpm check           # typecheck + lint + format + test + static-export build
 ```
 
-Individual scripts: `npm run typecheck | lint | format | test | build`.
+Individual scripts: `pnpm typecheck | lint | format | test | build`.
+
+### Tooling & supply-chain
+
+We use pnpm with two supply-chain hardening defaults configured in `pnpm-workspace.yaml`:
+
+- **Build-script allowlist** — dependency lifecycle scripts (`postinstall` etc.) are blocked
+  unless explicitly allowed under `allowBuilds`. This neutralizes the most common npm
+  supply-chain payload. pnpm errors on any *new* package with a build script until you record a
+  decision, so nothing runs scripts silently.
+- **Release cooldown** (`minimumReleaseAge: 4320` = 3 days) — pnpm refuses to install dependency
+  versions published in the last 3 days, so a compromised release (usually detected and yanked
+  within a day or two) never reaches us. The `@types/*` scope is exempt — those are declaration-only
+  files with no executable code. Versions already pinned in `pnpm-lock.yaml` install unaffected.
 
 ## Project structure
 

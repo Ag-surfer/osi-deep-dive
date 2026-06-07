@@ -2,9 +2,23 @@
 
 A statically-exported Next.js 16 educational site about the OSI model, deployed to GitHub Pages.
 
+## Package manager (pnpm, not npm)
+
+This project uses **pnpm** for supply-chain reasons. Always use `pnpm` (not `npm`/`npx`):
+`pnpm install`, `pnpm dev`, `pnpm check`, `pnpm exec <bin>`. Settings live in
+`pnpm-workspace.yaml`:
+
+- **`allowBuilds`** — dependency build/lifecycle scripts are blocked unless listed (`unrs-resolver:
+  true`; `sharp: false`). pnpm errors on any *new* package with a build script until you add a
+  decision here — never blanket-approve; check the package first.
+- **`minimumReleaseAge: 4320`** (3-day cooldown) — pnpm rejects dep versions published in the last
+  3 days (dodges zero-day compromised releases). `@types/*` is excluded (declaration-only). If a
+  fresh version is genuinely needed before it ages, prefer waiting; only narrow the policy with a
+  reason. The committed lockfile already contains aged versions, so `--frozen-lockfile` installs work.
+
 ## Quality gate (non-negotiable)
 
-`npm run check` = `typecheck + lint + format + test + build`. Nothing ships on a red gate.
+`pnpm check` = `typecheck + lint + format + test + build`. Nothing ships on a red gate.
 The **build is part of the gate** because static-export errors (e.g. a dynamic route missing
 `generateStaticParams`) only surface at `next build`.
 
@@ -13,7 +27,7 @@ The **build is part of the gate** because static-export errors (e.g. a dynamic r
 A Lighthouse budget guards perf/a11y/SEO and bundle size. Config in `lighthouserc.json`;
 enforced in CI by `.github/workflows/lighthouse.yml` on every push/PR (fails on regression).
 
-- Run locally: `CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")" npm run perf`
+- Run locally: `CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")" pnpm perf`
   (rebuilds with an empty basePath, serves the gzip'd export via `scripts/perf-server.mjs`, runs Lighthouse).
 - Current baseline: **Performance 98-99, Accessibility 100, Best-Practices 100, SEO 100**; JS ~185 KB,
   total ~260 KB per page. Thresholds: perf ≥ 0.85, a11y/bp/seo ≥ 0.95, script ≤ 280 KB, total ≤ 440 KB,
@@ -45,7 +59,7 @@ enforced in CI by `.github/workflows/lighthouse.yml` on every push/PR (fails on 
   need `generateStaticParams` + `dynamicParams=false`. A `.nojekyll` file is required or Pages strips
   the `_next/` asset dir.
 - **Visual verification:** Playwright MCP wasn't available mid-session; `scripts/shoot.mjs` (local
-  Playwright) screenshots pages so changes can be eyeballed. `npm run dev` then `node scripts/shoot.mjs`.
+  Playwright) screenshots pages so changes can be eyeballed. `pnpm dev` then `node scripts/shoot.mjs`.
 
 ## Dev-time MCP servers (`.mcp.json`)
 

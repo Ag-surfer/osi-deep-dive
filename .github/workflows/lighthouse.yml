@@ -15,18 +15,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       # Build with an empty basePath so the static export serves correctly at the
       # root for the local perf server (the deploy workflow builds with the Pages
       # basePath separately).
       - name: Build static export
-        run: npm run build
+        run: pnpm run build
         env:
           GITHUB_REPOSITORY: ""
 
@@ -34,4 +36,4 @@ jobs:
       # lighthouserc.json and fails the job if the perf budget regresses.
       # Chrome is preinstalled on the ubuntu runner.
       - name: Lighthouse CI assert
-        run: npx lhci autorun
+        run: pnpm exec lhci autorun

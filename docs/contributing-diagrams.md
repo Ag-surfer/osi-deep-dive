@@ -164,10 +164,10 @@ start position must already tell the story.
 
 ## Verify before opening a PR
 
-1. `npm run check` — typecheck + lint + format + **test** (header bit-sums) + build. Must be green.
-2. `npm run dev`, view the page in **light and dark** mode; confirm the diagram is legible and
+1. `pnpm check` — typecheck + lint + format + **test** (header bit-sums) + build. Must be green.
+2. `pnpm dev`, view the page in **light and dark** mode; confirm the diagram is legible and
    theme-correct, and readable with OS "reduce motion" enabled.
-3. `npm run perf` — the Lighthouse budget. **Accessibility must stay 100**, and a new client island
+3. `pnpm perf` — the Lighthouse budget. **Accessibility must stay 100**, and a new client island
    must not push the script size past the budget (animated/sequence/header diagrams add ~0 JS; rough.js
    diagrams add a little).
 4. Cite any new factual claims (header fields, protocol behaviour) in the layer's `sources`.

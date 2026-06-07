@@ -1,0 +1,26 @@
+# pnpm configuration — supply-chain hardening.
+# In pnpm v11 this file (not package.json / .npmrc) is the home for pnpm settings.
+# See https://pnpm.io/settings
+
+# Cooldown: refuse to install dependency versions published less than this many
+# minutes ago. 4320 = 3 days. Most malicious npm releases are detected and yanked
+# within a day or two, so this dodges zero-day compromised versions before they
+# reach us. Only affects resolution/updates — versions already pinned in
+# pnpm-lock.yaml install fine under --frozen-lockfile.
+minimumReleaseAge: 4320
+
+# Exempt the @types/* scope from the cooldown: DefinitelyTyped packages are pure
+# .d.ts declaration files with no executable code and no install scripts, so the
+# cooldown (which guards against compromised *runtime* code) adds nothing for them.
+# Without this, a freshly-published type-only floor version (e.g. @types/mdx@2.0.14)
+# can't resolve at all.
+minimumReleaseAgeExclude:
+  - "@types/*"
+
+# Lifecycle/build scripts (postinstall etc.) run ONLY for packages set to true
+# below. Everything else is blocked, which stops the most common supply-chain
+# payload. pnpm errors on any *new* package with a build script until a decision
+# is recorded here, so nothing runs scripts silently.
+allowBuilds:
+  unrs-resolver: true # native resolver required by eslint-config-next's import resolution
+  sharp: false # unused — images.unoptimized: true + static export, so never invoked
