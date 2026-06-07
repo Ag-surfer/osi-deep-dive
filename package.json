@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "A deep-dive, MIT/Berkeley-grade educational reference for the OSI model — one in-depth page per layer.",
+  "packageManager": "pnpm@11.5.2",
   "engines": {
     "node": ">=20"
   },
@@ -17,7 +18,7 @@
     "format:fix": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm run format && npm run test && npm run build",
+    "check": "pnpm typecheck && pnpm lint && pnpm format && pnpm test && pnpm build",
     "perf": "GITHUB_REPOSITORY= next build && lhci autorun"
   },
   "dependencies": {
