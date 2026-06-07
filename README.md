@@ -57,6 +57,9 @@ To add or edit a layer, edit `lib/layers.ts` (metadata) and `content/layers/<slu
 Custom MDX components (`<HeaderDiagram>`, `<Callout>`, `<Quiz>`, `<WorkedExample>`, `<SequenceDiagram>`)
 are registered in `mdx-components.tsx` and available in any layer file without imports.
 
+Adding a **diagram**? See the [Diagram contributing guide](./docs/contributing-diagrams.md) — it covers
+the four diagram families, copy-paste templates, and the theme/accessibility/reduced-motion conventions.
+
 ## Deployment
 
 Pushing to `main` triggers `.github/workflows/deploy.yml`, which runs the build and publishes the

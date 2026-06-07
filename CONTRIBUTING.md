@@ -24,10 +24,15 @@ are very welcome — especially anything that makes the content **more accurate*
   `<HeaderDiagram>`, `<Callout>`, `<ProtocolTable>`, `<WorkedExample>`, `<SequenceDiagram>`,
   `<Quiz>`, `<RFCRef>`, `<KeyTerm>`.
 
-## How to add a header diagram
+## How to add a diagram
 
-`<HeaderDiagram>` takes a `fields` array of `{ name, bits, desc, variable? }`. Bits must sum to the
-real header size — double-check against the RFC. Mark variable-length fields with `variable: true`.
+Layer diagrams come in four flavours (bit-level headers, message sequences, hand-drawn rough.js, and
+CSS-animated SVG). See the dedicated **[Diagram contributing guide](./docs/contributing-diagrams.md)**
+for which to pick, copy-paste templates, the theme/accessibility/reduced-motion conventions, and the
+verification checklist.
+
+Quick note for **header** diagrams: bit widths must sum to the real header size — they're added to
+`lib/headers.ts` and an automated test (`lib/headers.test.ts`) enforces it, so a wrong bit can't ship.
 
 ## Reporting errors
 
