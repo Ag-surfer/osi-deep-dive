@@ -1,0 +1,132 @@
+export const sources = [
+  { label: "RFC 1034 / 1035 — Domain Names: Concepts & Implementation", href: "https://www.rfc-editor.org/rfc/rfc1034.html" },
+  { label: "RFC 4033–4035 — DNS Security Extensions (DNSSEC)", href: "https://www.rfc-editor.org/rfc/rfc4033.html" },
+  { label: "RFC 8484 — DNS Queries over HTTPS (DoH)", href: "https://www.rfc-editor.org/rfc/rfc8484.html" },
+  { label: "RFC 9499 — DNS Terminology", href: "https://www.rfc-editor.org/rfc/rfc9499.html" },
+];
+
+## The problem DNS solves
+
+People remember names; the network routes on [IP addresses](../../network/). DNS is the **distributed
+directory** that maps one to the other — and it has to do so for hundreds of millions of domains,
+billions of times per second, with no central server anyone could ever scale or trust. Its answer is a
+**hierarchy** of delegated authority plus **aggressive caching**: no single machine knows everything,
+and popular answers are remembered close to the user.
+
+## The hierarchy
+
+A domain name is read **right to left**, each dot a level of delegation:
+
+- The **root** (`.`) — served by 13 logical root server addresses (anycast to hundreds of instances). It
+  knows only who runs each TLD.
+- **TLD** servers (`.com`, `.org`, `.uk`) — know which name servers are authoritative for each domain
+  registered under them.
+- **Authoritative** servers — hold the actual records for a **zone** (e.g. `example.com`) and are the
+  source of truth. A zone can **delegate** a subdomain to yet another authoritative server.
+
+## Recursive vs. iterative resolution
+
+Two roles do the work. Your machine's **stub resolver** sends one **recursive** query ("get me the
+answer, do whatever it takes") to a **recursive resolver** (your ISP's, or `8.8.8.8`/`1.1.1.1`). That
+resolver then does the legwork with **iterative** queries, walking the hierarchy and following
+**referrals** until it reaches the authoritative answer. Step through a cold-cache lookup:
+
+<DnsResolutionViz domain="www.example.com" />
+
+<Callout variant="insight" title="The whole walk happens once, then caching takes over">
+That root → TLD → authoritative walk is the **cold-cache** path. The recursive resolver **caches** every
+answer (and referral) for its **TTL**, so the *next* lookup of anything under `.com` skips the root, and
+the next lookup of `www.example.com` is answered instantly from cache. This is why DNS scales:
+the root and TLD servers are consulted far less than their position suggests, because the answers above
+the leaf change rarely and cache widely. Resolvers also do **negative caching** (remembering NXDOMAIN)
+so repeated lookups of a non-existent name don't re-walk the tree.
+</Callout>
+
+## Record types
+
+A zone is a set of **resource records**, each a `name → type → value` with a TTL:
+
+| Type | Maps | Purpose |
+| --- | --- | --- |
+| **A / AAAA** | name → IPv4 / IPv6 | The fundamental address lookup |
+| **CNAME** | name → another name | An alias (resolve the target instead) |
+| **MX** | domain → mail server (priority) | Where to deliver [email](../email/) |
+| **NS** | zone → authoritative name server | Delegation — how the hierarchy is wired |
+| **SOA** | zone → admin/serial/timers | Zone metadata, one per zone |
+| **TXT** | name → free text | SPF/DKIM/DMARC, domain verification |
+| **PTR** | IP → name | Reverse lookup |
+| **SRV / CAA** | service/CA policy | Service discovery; who may issue certs |
+
+DNS rides mostly on **UDP port 53** (one tiny datagram each way — fast), falling back to **TCP** for
+large responses and zone transfers, with **EDNS** extending the old 512-byte message limit.
+
+## DNSSEC: trusting the answer
+
+Plain DNS has **no authentication** — a forged response that arrives first is believed. **DNSSEC** signs
+records (`RRSIG`) with zone keys (`DNSKEY`), and each parent vouches for its child's key with a **DS**
+record, forming a **chain of trust from the signed root** down to the zone. A validating resolver can
+then detect a forged or tampered answer. Note what DNSSEC does *not* do: it provides **integrity, not
+confidentiality** — the query and answer are still in the clear. Privacy is a separate concern, addressed
+by **DNS over HTTPS/TLS (DoH/DoT)**, which encrypt the transport to the resolver.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **NXDOMAIN** — the name genuinely doesn't exist (typo, expired domain, or a record never created).
+- **Resolves to a stale/old IP after a change** — a high **TTL** still cached by resolvers; lower the TTL
+  *before* a planned migration so the change propagates quickly.
+- **Works on one resolver, not another** — inconsistent caches, a **lame delegation** (an NS record
+  pointing at a server that isn't actually authoritative), or split-horizon DNS.
+- **Intermittent failures on large responses** — UDP truncation with TCP/EDNS fallback blocked by a
+  firewall; DNSSEC and IPv6 answers are large and hit this often.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface of the directory">
+- **Cache poisoning (Kaminsky)** — racing a forged answer into a resolver's cache to hijack a domain.
+  Defenses: **source-port + query-ID randomization** (raising the guessing bar) and **DNSSEC** validation.
+- **DNS spoofing / on-path tampering** — an attacker on the path rewriting answers; DNSSEC detects it,
+  DoH/DoT hides the query from snoopers.
+- **DDoS amplification** — a small spoofed query yields a large response aimed at a victim; mitigated by
+  response-rate limiting and closing open resolvers.
+- **Domain/registrar hijack** — compromise the registrar account or NS records and you own the name;
+  protect with registry locks and 2FA. DNS is critical infrastructure — treat it like it.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "What is the difference between the recursive query a stub resolver sends and the iterative queries a recursive resolver makes?",
+      options: [
+        "They are the same",
+        "The stub asks the resolver to do all the work and return a final answer (recursive); the resolver then walks the hierarchy itself, following referrals server to server (iterative)",
+        "Recursive queries use TCP and iterative use UDP",
+      ],
+      answer: 1,
+      explanation: "A recursive query says 'get me the final answer.' The recursive resolver fulfills it by issuing iterative queries — root, then TLD, then authoritative — each returning either a referral or the answer, until it has the result to hand back.",
+    },
+    {
+      q: "Why don't the root and TLD servers get overwhelmed despite being at the top of every lookup?",
+      options: [
+        "They run on supercomputers",
+        "Resolvers cache referrals and answers for their TTL, so most lookups are served from cache and rarely reach the root or TLD",
+        "Most domains skip the hierarchy",
+      ],
+      answer: 1,
+      explanation: "Caching is what makes DNS scale: once a resolver learns the .com servers or a domain's records, it reuses them for the TTL. The upper tiers change rarely and cache widely, so they see a tiny fraction of the apparent traffic.",
+    },
+    {
+      q: "What protection does DNSSEC provide, and what does it not?",
+      options: [
+        "It encrypts queries for privacy",
+        "It provides integrity/authenticity (a chain of signatures detects forged answers) but not confidentiality — queries and answers are still in the clear",
+        "It speeds up resolution",
+      ],
+      answer: 1,
+      explanation: "DNSSEC signs records and chains trust from the root, so a validating resolver can reject tampered answers. It does not hide the query or answer — that privacy gap is what DoH/DoT address by encrypting the transport.",
+    },
+  ]}
+/>

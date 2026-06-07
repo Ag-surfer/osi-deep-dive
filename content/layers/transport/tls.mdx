@@ -1,0 +1,156 @@
+export const sources = [
+  { label: "RFC 8446 — The Transport Layer Security (TLS) Protocol Version 1.3", href: "https://www.rfc-editor.org/rfc/rfc8446.html" },
+  { label: "RFC 5246 — TLS Version 1.2", href: "https://www.rfc-editor.org/rfc/rfc5246.html" },
+  { label: "RFC 6125 — Identity Verification in TLS (hostname validation)", href: "https://www.rfc-editor.org/rfc/rfc6125.html" },
+  { label: "RFC 6962 — Certificate Transparency", href: "https://www.rfc-editor.org/rfc/rfc6962.html" },
+];
+
+## Where TLS sits
+
+TLS provides a **secure channel** — confidentiality, integrity, and authentication — for application
+data. In strict OSI terms its jobs straddle the **Session** and **Presentation** layers, but in the
+TCP/IP world it rides directly on a Transport connection (TCP, or DTLS over UDP) and presents a
+plain reliable stream upward, so we cover it here alongside its transport. HTTPS is simply HTTP over a
+TLS channel on port 443.
+
+<Callout variant="insight" title="Three guarantees, and what each defends">
+- **Confidentiality** — eavesdroppers see only ciphertext (AEAD encryption).
+- **Integrity** — any tampering is detected and the connection fails (the AEAD authentication tag).
+- **Authentication** — you're talking to who you think (the server's **certificate**, validated against
+  a trusted CA; optionally the client's too). Without authentication, encryption alone just gives you a
+  private channel to an *attacker*.
+</Callout>
+
+## The record protocol
+
+Once the handshake completes, everything is carried in **records**: application data is fragmented,
+each fragment sealed with **AEAD** (Authenticated Encryption with Associated Data — e.g. AES-GCM or
+ChaCha20-Poly1305) under keys derived in the handshake, and tagged so tampering is detected on receipt.
+AEAD fuses encryption and integrity into one operation, which is why TLS 1.3 removed the old
+encrypt-then-MAC cipher constructions that caused a decade of padding-oracle bugs.
+
+## The handshake
+
+The handshake authenticates the peer and agrees on shared keys. **TLS 1.3 cut it to one round trip** and
+made **forward secrecy mandatory** — a redesign worth understanding against 1.2.
+
+<SequenceDiagram
+  actors={["Client", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "ClientHello: versions, cipher suites, key_share (ephemeral DH), SNI, ALPN" },
+    { from: 1, to: 0, label: "ServerHello: chosen suite + key_share → both derive the shared secret", dashed: true },
+    { from: 1, to: 0, label: "{EncryptedExtensions, Certificate, CertificateVerify, Finished} — encrypted", dashed: true },
+    { from: 0, to: 1, label: "Finished — handshake done; application data flows (1-RTT)" },
+  ]}
+  caption="TLS 1.3: the client sends its key share in the very first message, so after one round trip both sides hold session keys. Everything after ServerHello — including the server's certificate — is already encrypted."
+/>
+
+<Callout variant="note" title="What 1.3 changed from 1.2">
+- **1-RTT, not 2** — the client guesses the key-exchange group and sends its share immediately.
+- **Forward secrecy is mandatory** — only **ephemeral** (EC)DHE key exchange survives. Static-RSA key
+  transport (where compromising the server key later decrypts *recorded* past traffic) is gone.
+- **The cipher menu was gutted** — no RC4, no CBC-mode MtE, no compression, no renegotiation. Only AEAD
+  suites remain, eliminating whole classes of attack (BEAST, CRIME, Lucky13, POODLE).
+- **More is encrypted** — the certificate and the rest of the handshake are encrypted, improving privacy.
+</Callout>
+
+<Callout variant="insight" title="Forward secrecy, concretely">
+With **ephemeral** Diffie-Hellman, the session key is derived from one-time key pairs that are thrown
+away after the handshake. An attacker who records the ciphertext today and **steals the server's private
+key tomorrow** still cannot decrypt that recorded session — the ephemeral secrets are gone. This is the
+single biggest reason 1.3 mandated (EC)DHE and removed RSA key transport.
+</Callout>
+
+## Certificates and the PKI trust chain
+
+Authentication rests on a **chain of trust**: the server presents a **leaf** certificate (binding its
+public key to its hostname), signed by one or more **intermediate** CAs, chaining up to a **root** CA
+your OS/browser already trusts. The client validates the whole chain — signatures, **hostname match**
+(<RFCRef n={6125} />), validity dates, and **revocation** (OCSP/CRL, ideally **OCSP stapling** so the
+server proves freshness without a side connection). Two handshake extensions ride along:
+
+- **SNI** (Server Name Indication) — the client names the host it wants in the ClientHello, so one IP
+  can serve many TLS sites. (Encrypted SNI / ECH closes the privacy gap that plaintext SNI leaves.)
+- **ALPN** — negotiates the application protocol (e.g. `h2`, `h3`) inside the handshake, saving a round
+  trip and enabling HTTP/2 and HTTP/3.
+
+**Certificate Transparency** (<RFCRef n={6962} />) requires CAs to log every certificate to public,
+append-only logs, so a mis-issued certificate for your domain can be detected.
+
+## Session resumption and 0-RTT
+
+A full handshake is costly, so TLS lets a returning client **resume**. In 1.3, the server hands out a
+**pre-shared key (PSK) ticket**; on return the client presents it and skips the certificate exchange.
+Resumption can even carry **0-RTT "early data"** — application data sent in the *first* flight, before
+the handshake finishes.
+
+<Callout variant="warning" title="The 0-RTT replay trade-off">
+0-RTT early data is **replayable**: an attacker can capture and resend that first flight, and the server
+may process it twice. It's therefore safe only for **idempotent** requests (a GET), never for anything
+with side effects (a payment). 0-RTT also weakens forward secrecy for that early data. Speed here is a
+deliberate trade against security — enable it only where the semantics are safe.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **NET::ERR_CERT_*  / "certificate not trusted"** — a missing intermediate in the chain, an untrusted
+  root, or a self-signed cert. Servers must send the full chain (leaf + intermediates), not just the leaf.
+- **Hostname mismatch** — the certificate's SAN doesn't cover the requested name (often a bare apex vs.
+  `www`, or wrong SNI).
+- **Expired certificate / clock skew** — validity is absolute time; a wrong client clock breaks
+  otherwise-valid certs.
+- **Handshake failure / no shared cipher** — a client/server with no overlapping protocol version or
+  AEAD suite (e.g. an old client against a 1.3-only server).
+- **Slow first byte** — full handshakes on every connection; enable resumption/tickets and OCSP stapling.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Defending the channel and the trust">
+- **Downgrade attacks** — forcing a weaker version/suite; 1.3's handshake transcript hash and version
+  signaling detect tampering, and **HSTS** forces HTTPS so a stripping attacker can't drop you to HTTP.
+- **Certificate mis-issuance / rogue CA** — the PKI's weakest link; **Certificate Transparency** and
+  CAA records constrain who may issue for a domain.
+- **Private-key compromise** — bounded by **forward secrecy** (past sessions stay safe) and short-lived
+  certificates plus prompt revocation.
+- **Implementation bugs** — memory-safety flaws (Heartbleed) leaked keys despite correct protocol;
+  defense is hardened, audited libraries, not protocol design alone.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "How does TLS 1.3 complete its handshake in one round trip when 1.2 needed two?",
+      options: [
+        "It skips authentication",
+        "The client sends its ephemeral key share in the ClientHello, so both sides can derive keys after a single exchange",
+        "It uses UDP instead of TCP",
+      ],
+      answer: 1,
+      explanation: "TLS 1.3 has the client guess the key-exchange group and include its key_share in the first message. The server replies with its share, and both immediately derive the session secret — one round trip, with the certificate now sent encrypted.",
+    },
+    {
+      q: "Why does mandatory ephemeral (EC)DHE give 'forward secrecy'?",
+      options: [
+        "It encrypts the certificate",
+        "Session keys come from one-time key pairs that are discarded, so a later theft of the server's long-term key can't decrypt recorded past sessions",
+        "It makes the handshake faster",
+      ],
+      answer: 1,
+      explanation: "With ephemeral key exchange, the secrets protecting a session exist only for that session and are thrown away. Compromising the server's static key afterward reveals nothing about traffic already recorded — that's forward secrecy, and why 1.3 dropped static-RSA key transport.",
+    },
+    {
+      q: "Why must TLS 1.3 0-RTT 'early data' be restricted to idempotent requests?",
+      options: [
+        "It is sent in plaintext",
+        "It is replayable — an attacker can resend the captured first flight, so a non-idempotent action could execute twice",
+        "It cannot be encrypted at all",
+      ],
+      answer: 1,
+      explanation: "0-RTT data isn't protected against replay: a captured early-data flight can be re-sent and reprocessed. That's acceptable for a GET but dangerous for anything with side effects, so 0-RTT is limited to idempotent operations.",
+    },
+  ]}
+/>

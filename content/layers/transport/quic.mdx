@@ -1,0 +1,143 @@
+export const sources = [
+  { label: "RFC 9000 — QUIC: A UDP-Based Multiplexed and Secure Transport", href: "https://www.rfc-editor.org/rfc/rfc9000.html" },
+  { label: "RFC 9001 — Using TLS to Secure QUIC", href: "https://www.rfc-editor.org/rfc/rfc9001.html" },
+  { label: "RFC 9002 — QUIC Loss Detection and Congestion Control", href: "https://www.rfc-editor.org/rfc/rfc9002.html" },
+  { label: "RFC 9114 — HTTP/3", href: "https://www.rfc-editor.org/rfc/rfc9114.html" },
+];
+
+## Why rebuild transport over UDP?
+
+TCP works, but it is **hard to change**. Its logic lives in OS kernels and is second-guessed by every
+middlebox on the path, so new features (faster handshakes, better loss recovery) take a decade to
+deploy — TCP has **ossified**. And combining TCP with [TLS](../tls/) layers two separate handshakes and
+leaves one stubborn flaw: **transport-level head-of-line blocking**. QUIC's answer is to rebuild a
+modern transport — reliable, congestion-controlled, and *always encrypted* — **in user space on top of
+UDP**, where it can be shipped in an app update and evolve freely. It is the basis of **HTTP/3**.
+
+<Callout variant="insight" title="UDP is the substrate, not the point">
+QUIC doesn't use UDP for UDP's semantics — it reimplements reliability, ordering, flow control, and
+congestion control itself. UDP is just the **lowest-friction way through the existing internet**: it
+passes most middleboxes, and a user-space stack over UDP can be updated without touching the kernel.
+QUIC is to UDP what TCP is to IP — a reliable transport built on a datagram service.
+</Callout>
+
+## Streams: multiplexing without head-of-line blocking
+
+The defining win. HTTP/2 multiplexes many requests over **one** TCP connection — but TCP is a single
+ordered byte stream, so **one lost segment stalls every multiplexed request behind it** until that one
+segment is retransmitted. QUIC carries many **independent streams** within a connection, each with its
+own ordering. A loss on stream 3 holds up only stream 3; streams 1, 2, and 4 keep flowing.
+
+<SequenceDiagram
+  actors={["HTTP/2 over TCP", "HTTP/3 over QUIC"]}
+  steps={[
+    { from: 0, to: 0, label: "3 requests multiplexed on ONE ordered byte stream" },
+    { from: 0, to: 0, label: "one segment lost → ALL 3 stall until it is retransmitted (HoL block)" },
+    { from: 1, to: 1, label: "3 requests on 3 independent QUIC streams" },
+    { from: 1, to: 1, label: "loss on stream 2 → only stream 2 waits; 1 and 3 deliver", dashed: true },
+  ]}
+  caption="Transport-level head-of-line blocking is intrinsic to multiplexing over a single TCP stream. QUIC's per-stream ordering confines a loss to the one stream that lost data."
+/>
+
+## The merged handshake
+
+TCP+TLS runs two handshakes in sequence (TCP's SYN exchange, then TLS's). QUIC **fuses the transport
+and cryptographic handshakes** (TLS 1.3 is built directly into QUIC, <RFCRef n={9001} />), so a
+connection — transport parameters *and* session keys — is established in **one round trip**, or **zero**
+for a returning client using a PSK.
+
+<SequenceDiagram
+  actors={["Client", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "Initial: ClientHello + transport parameters (one flight)" },
+    { from: 1, to: 0, label: "ServerHello + cert + transport params → keys ready (1-RTT)", dashed: true },
+    { from: 0, to: 1, label: "Encrypted application data — or 0-RTT data in the very first flight on resume" },
+  ]}
+  caption="There is no separate TCP handshake to wait through: QUIC carries the TLS 1.3 handshake in its first packets, so transport setup and key agreement complete together."
+/>
+
+<Callout variant="note" title="Always encrypted — including the transport itself">
+QUIC encrypts and authenticates almost everything, including most of its own headers. Packet numbers,
+ACKs, and stream framing are not visible to middleboxes — which is what *keeps QUIC evolvable* (boxes
+can't depend on, and thus ossify, fields they can't see). The cost is **observability**: traditional
+passive TCP monitoring doesn't work, pushing diagnostics to the endpoints.
+</Callout>
+
+## Connection IDs and migration
+
+A TCP connection **is** its 4-tuple (source IP/port, dest IP/port) — change your IP (Wi-Fi → cellular)
+and the connection dies. QUIC identifies a connection by an opaque **Connection ID** carried in each
+packet, *independent of the IP/port*. So when your phone switches networks, the QUIC connection
+**migrates** and survives — the download doesn't restart. Connection IDs are also rotated to stop
+on-path observers from linking your traffic across paths.
+
+## Loss recovery and congestion control
+
+QUIC keeps TCP's congestion-control ideas (it ships CUBIC/BBR-style controllers, <RFCRef n={9002} />)
+but fixes a long-standing TCP measurement flaw:
+
+<Callout variant="insight" title="Monotonic packet numbers kill retransmission ambiguity">
+TCP reuses a segment's sequence number when it retransmits, so an ACK can't reveal whether it matched
+the original or the retransmission — the ambiguity that forces [Karn's algorithm](../tcp/). QUIC gives
+**every packet a new, strictly increasing packet number**, even retransmissions. An ACK therefore always
+identifies exactly which transmission arrived, yielding **unambiguous, accurate RTT samples** and cleaner
+loss detection. Stream data is re-sent in *new* packets, decoupling "what to deliver" from "which packet
+carried it."
+</Callout>
+
+## HTTP/3
+
+HTTP/3 (<RFCRef n={9114} />) is HTTP semantics mapped onto QUIC: each request/response pair gets its own
+QUIC stream (so requests never head-of-line-block each other), and **QPACK** replaces HTTP/2's HPACK
+header compression with a design that tolerates QUIC's out-of-order stream delivery. ALPN negotiates
+`h3` during the handshake.
+
+## Failure modes & trade-offs
+
+<Callout variant="warning" title="Where QUIC bites">
+- **UDP blocked or throttled** — some enterprise/captive networks drop UDP or rate-limit it; clients
+  **fall back to TCP+TLS (HTTP/2)**, losing QUIC's benefits. Happy-eyeballs-style racing hides the delay.
+- **Higher CPU cost** — user-space processing plus per-packet encryption is heavier than kernel TCP with
+  hardware offload (though offload is catching up).
+- **Amplification abuse** — an unvalidated handshake could let a spoofed client turn the server into a
+  reflector; QUIC limits the server to ~3× the client's bytes until the address is validated.
+- **Operational blind spots** — encrypted transport headers defeat legacy passive monitoring; you
+  instrument at the endpoints (e.g. qlog) instead.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "HTTP/2 multiplexes requests over one TCP connection. Why does a single packet loss stall all of them?",
+      options: [
+        "TCP encrypts the requests together",
+        "TCP is a single ordered byte stream, so nothing after the lost segment can be delivered until it's retransmitted — transport-level head-of-line blocking",
+        "HTTP/2 only allows one request at a time",
+      ],
+      answer: 1,
+      explanation: "All HTTP/2 streams share one ordered TCP byte stream. TCP must deliver in order, so a lost segment blocks every multiplexed request behind it. QUIC gives each stream its own ordering, confining the stall to the stream that lost data.",
+    },
+    {
+      q: "How does a QUIC connection survive a phone moving from Wi-Fi to cellular, when a TCP connection would break?",
+      options: [
+        "QUIC reconnects instantly in the background",
+        "QUIC identifies the connection by an opaque Connection ID independent of the IP/port, so it migrates across the address change",
+        "QUIC uses a fixed IP address",
+      ],
+      answer: 1,
+      explanation: "A TCP connection is defined by its 4-tuple, so an IP change kills it. QUIC tags packets with a Connection ID that's independent of the IP and port, letting the same connection continue (migrate) after the network switch.",
+    },
+    {
+      q: "Why can QUIC produce more accurate RTT estimates than TCP?",
+      options: [
+        "It runs over UDP",
+        "Every QUIC packet — including retransmissions — has a new, strictly increasing packet number, so an ACK unambiguously identifies which transmission arrived",
+        "It measures RTT in the application layer",
+      ],
+      answer: 1,
+      explanation: "TCP reuses sequence numbers on retransmission, creating the ACK ambiguity that Karn's algorithm works around. QUIC never reuses packet numbers, so each ACK maps to exactly one transmission — giving clean, unambiguous RTT samples.",
+    },
+  ]}
+/>

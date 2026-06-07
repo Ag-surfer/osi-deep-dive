@@ -12,6 +12,16 @@ import { Quiz } from "@/components/Quiz";
 import { NetworkTopology } from "@/components/diagrams/NetworkTopology";
 import { CsmaCdTimeline } from "@/components/diagrams/CsmaCdTimeline";
 import { TcpStateMachine } from "@/components/diagrams/TcpStateMachine";
+import { DijkstraViz } from "@/components/diagrams/DijkstraViz";
+import { BgpBestPathViz } from "@/components/diagrams/BgpBestPathViz";
+import { CongestionControlViz } from "@/components/diagrams/CongestionControlViz";
+import { SpanningTreeViz } from "@/components/diagrams/SpanningTreeViz";
+import { CrcViz } from "@/components/diagrams/CrcViz";
+import { LineCodingViz } from "@/components/diagrams/LineCodingViz";
+import { EyeDiagramViz } from "@/components/diagrams/EyeDiagramViz";
+import { HuffmanViz } from "@/components/diagrams/HuffmanViz";
+import { DnsResolutionViz } from "@/components/diagrams/DnsResolutionViz";
+import { KerberosViz } from "@/components/diagrams/KerberosViz";
 import { SignalWire } from "@/components/diagrams/anim/SignalWire";
 import { PacketRouting } from "@/components/diagrams/anim/PacketRouting";
 import { SlidingWindow } from "@/components/diagrams/anim/SlidingWindow";
@@ -39,6 +49,16 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     NetworkTopology,
     CsmaCdTimeline,
     TcpStateMachine,
+    DijkstraViz,
+    BgpBestPathViz,
+    CongestionControlViz,
+    SpanningTreeViz,
+    CrcViz,
+    LineCodingViz,
+    EyeDiagramViz,
+    HuffmanViz,
+    DnsResolutionViz,
+    KerberosViz,
     SignalWire,
     PacketRouting,
     SlidingWindow,

@@ -1,0 +1,246 @@
+export const sources = [
+  { label: "RFC 4271 — A Border Gateway Protocol 4 (BGP-4)", href: "https://www.rfc-editor.org/rfc/rfc4271.html" },
+  { label: "RFC 4456 — BGP Route Reflection", href: "https://www.rfc-editor.org/rfc/rfc4456.html" },
+  { label: "RFC 5065 — Autonomous System Confederations for BGP", href: "https://www.rfc-editor.org/rfc/rfc5065.html" },
+  { label: "RFC 1997 / 8092 — BGP Communities / Large Communities", href: "https://www.rfc-editor.org/rfc/rfc8092.html" },
+  { label: "RFC 6811 / 6480 — BGP Prefix Origin Validation / RPKI", href: "https://www.rfc-editor.org/rfc/rfc6811.html" },
+  { label: "RFC 7454 — BGP Operations and Security (BCP 194)", href: "https://www.rfc-editor.org/rfc/rfc7454.html" },
+];
+
+## Where BGP sits
+
+BGP is the **exterior gateway protocol** that stitches the internet's ~75,000 **autonomous systems**
+(AS) into one reachable whole. An IGP like [OSPF](../ospf/) finds the *shortest* path inside one
+administrative domain; BGP finds a **policy-compliant** path *between* domains — where "shortest" is
+meaningless because the hops belong to competing companies with contracts, not a shared metric. It is a
+[**path-vector**](../routing-concepts/) protocol: it advertises reachable prefixes tagged with the full
+**AS_PATH** they traversed, and it chooses routes by a deterministic pipeline of **attributes**, not by
+a distance calculation.
+
+<Callout variant="insight" title="BGP's defining trait: policy over distance">
+Every other protocol on these pages optimizes a number (hop count, cost, composite metric). BGP
+optimizes **business policy**. Local Preference says "prefer my cheap transit provider over my
+expensive one" even if the expensive one is topologically closer. The AS_PATH provides loop prevention
+(reject any path containing your own AS) and a coarse length metric — but it is *far* down the decision
+list, below several policy knobs. Internalize that and BGP stops being mysterious.
+</Callout>
+
+## Autonomous systems, eBGP, and iBGP
+
+An **AS** is a network under one administrative/routing policy, identified by a **32-bit AS number**
+(ASN; the original 16-bit space, 0–65535, was exhausted). BGP runs in two modes that behave very
+differently:
+
+- **eBGP** — between routers in *different* ASes. Peers are usually directly connected (TTL 1), the
+  advertising router rewrites **NEXT_HOP** to itself, and the AS prepends its ASN to the AS_PATH.
+- **iBGP** — between routers in the *same* AS. Peers can be any distance apart (the session rides the
+  IGP), the AS_PATH and NEXT_HOP are **not** changed, and crucially:
+
+<Callout variant="warning" title="The iBGP split-horizon rule → the full-mesh problem">
+A router **must not** re-advertise an iBGP-learned route to another iBGP peer (there's no AS_PATH change
+inside the AS, so there'd be no loop protection). The consequence: every iBGP speaker must peer with
+**every other** iBGP speaker — a full mesh of `n(n−1)/2` sessions. At 50 routers that's 1,225 sessions.
+**Route reflectors** and **confederations** (below) exist solely to break this `n²` explosion.
+</Callout>
+
+## The BGP session
+
+BGP runs over **TCP port 179** — it inherits TCP's reliability, ordering, and flow control rather than
+reinventing them. A session walks a finite state machine and, once **Established**, exchanges routes
+incrementally (only changes thereafter), kept alive by KEEPALIVEs within the negotiated **hold time**.
+
+<SequenceDiagram
+  actors={["Router A", "Router B"]}
+  steps={[
+    { from: 0, to: 1, label: "TCP 179 three-way handshake — Connect → OpenSent" },
+    { from: 0, to: 1, label: "OPEN: my ASN, hold time, Router ID, capabilities" },
+    { from: 1, to: 0, label: "OPEN + KEEPALIVE — parameters agree → OpenConfirm", dashed: true },
+    { from: 0, to: 1, label: "KEEPALIVE — session Established" },
+    { from: 0, to: 1, label: "UPDATE: NLRI (prefixes) + path attributes" },
+    { from: 1, to: 0, label: "UPDATE / periodic KEEPALIVE (within hold time)", dashed: true },
+  ]}
+  caption="Idle → Connect → Active → OpenSent → OpenConfirm → Established. A session stuck in Active almost always means the underlying TCP 179 connection can't form (ACL, no route to peer, wrong address)."
+/>
+
+BGP uses four message types: **OPEN** (negotiate ASN/hold-time/capabilities), **UPDATE** (advertise NLRI
+with attributes, and withdraw routes), **KEEPALIVE** (liveness), and **NOTIFICATION** (signal an error
+and tear the session down).
+
+## Path attributes
+
+Routes carry **path attributes** — the inputs to every policy and the best-path decision. They fall
+into four classes by how peers must handle unknown ones:
+
+| Attribute | Class | Meaning |
+| --- | --- | --- |
+| **ORIGIN** | Well-known mandatory | How the route entered BGP: IGP (`i`) < EGP (`e`) < Incomplete (`?`) |
+| **AS_PATH** | Well-known mandatory | Ordered list of ASes traversed; loop check + length metric |
+| **NEXT_HOP** | Well-known mandatory | The IP to forward toward (recursively resolved via the IGP) |
+| **LOCAL_PREF** | Well-known discretionary | AS-wide outbound preference (higher wins); never leaves the AS |
+| **MED** | Optional non-transitive | "Multi-Exit Discriminator" hint to a neighbor AS (lower wins) |
+| **COMMUNITY** | Optional transitive | A taggable label for policy (e.g. `NO_EXPORT`) |
+| **ORIGINATOR_ID / CLUSTER_LIST** | Optional non-transitive | Route-reflector loop prevention |
+
+<Callout variant="note" title="WEIGHT is Cisco-only and never advertised">
+**Weight** is a Cisco-proprietary, router-*local* selector — it isn't a BGP attribute and is never sent
+to any peer. It's the very first tiebreak, so it's the bluntest "I prefer this path on this box" hammer.
+Don't confuse it with Local Preference, which *is* a real attribute carried AS-wide in iBGP.
+</Callout>
+
+## The best-path decision process
+
+When BGP holds several routes to the same prefix, it runs a strict, ordered elimination — the single
+most important thing to know cold at CCNP/expert level. Step through it on a real candidate set:
+
+<BgpBestPathViz
+  routes={[
+    { id: "Path A", via: "R2 · iBGP", weight: 0, localPref: 100, localOrigin: false, asPath: [65002, 65010], origin: "IGP", med: 50, ebgp: false, igpMetric: 20, routerId: "10.0.0.3" },
+    { id: "Path B", via: "eBGP · AS65003", weight: 0, localPref: 150, localOrigin: false, asPath: [65003, 65020, 65010], origin: "IGP", med: 0, ebgp: true, igpMetric: 5, routerId: "10.0.0.2" },
+    { id: "Path C", via: "eBGP · AS65004", weight: 0, localPref: 150, localOrigin: false, asPath: [65004, 65010], origin: "IGP", med: 30, ebgp: true, igpMetric: 10, routerId: "10.0.0.4" },
+    { id: "Path D", via: "eBGP · AS65004", weight: 0, localPref: 150, localOrigin: false, asPath: [65004, 65010], origin: "IGP", med: 10, ebgp: true, igpMetric: 8, routerId: "10.0.0.5" },
+  ]}
+  caption="Path A falls on Local Preference, B on AS-Path length, C on MED (it and D share neighbor AS 65004, so MED is validly compared) — leaving D. The highlighted column is the active rule; ★ marks the winner."
+/>
+
+The full order: **Weight** (Cisco-local) → **Local Preference** → **locally originated** → **AS-Path
+length** → **Origin** (i\<e\<?) → **MED** → **eBGP over iBGP** → **lowest IGP metric to NEXT_HOP** →
+(oldest eBGP / maximal-paths for ECMP) → **lowest Router ID** → lowest neighbor address.
+
+<Callout variant="warning" title="Two traps in the decision process">
+- **MED is only compared between routes from the *same* neighboring AS** (by default). Routes from
+  different neighbor ASes skip the MED comparison entirely — a frequent source of "why didn't my MED
+  win?" confusion. `bgp always-compare-med` overrides this, with care.
+- **The decision is per-prefix and deterministic**, but **Weight and Local Preference sit above AS-Path
+  length** — so a longer AS path routinely wins. Operators shape traffic with those knobs precisely
+  because they outrank the "natural" path length.
+</Callout>
+
+## NEXT_HOP and the recursive lookup
+
+Across an eBGP boundary the advertising router sets **NEXT_HOP** to itself. Within the AS, iBGP leaves
+NEXT_HOP **unchanged** — so an iBGP route's next hop is some *external* address the receiving router may
+have no direct route to. Two fixes: the IGP carries reachability to that next hop (BGP does a
+**recursive lookup**: prefix → BGP next-hop → IGP route → real interface), or the border router applies
+**next-hop-self** so iBGP peers forward to *it*. A "route is in the table but not used" symptom is very
+often an **unreachable or invalid NEXT_HOP**.
+
+## Scaling iBGP: route reflectors and confederations
+
+To escape the full mesh:
+
+- **Route reflectors (RR)** relax the iBGP split-horizon rule: an RR may *reflect* routes between its
+  **clients**, so clients peer only with the RR(s). Loops are prevented by two new attributes —
+  **ORIGINATOR_ID** (the route's origin inside the AS) and **CLUSTER_LIST** (the RR clusters it passed
+  through); a router drops a route whose list already contains its own cluster.
+- **Confederations** split one AS into smaller **sub-ASes** that run eBGP-like sessions between
+  themselves (intra-confederation), while appearing externally as a single ASN.
+
+<SequenceDiagram
+  actors={["Client R1", "Route Reflector", "Client R2"]}
+  steps={[
+    { from: 0, to: 1, label: "iBGP UPDATE: prefix learned via eBGP" },
+    { from: 1, to: 2, label: "Reflected to other clients (+ORIGINATOR_ID, +CLUSTER_LIST)", dashed: true },
+    { from: 2, to: 1, label: "R2 accepts: its cluster not in CLUSTER_LIST → no loop" },
+  ]}
+  caption="A route reflector legally re-advertises iBGP routes between clients, collapsing the n² full mesh to a hub-and-spoke while ORIGINATOR_ID/CLUSTER_LIST keep it loop-free."
+/>
+
+## Communities and policy
+
+A **community** is an arbitrary tag attached to a route so policy can act on groups of prefixes without
+listing them. **Well-known** communities trigger standard behavior — **NO_EXPORT** (don't advertise
+beyond the AS), **NO_ADVERTISE** (don't advertise to *any* peer), **NO_EXPORT_SUBCONFED**. Providers
+publish community schemes so customers can signal intent ("prepend twice in region X", "set local-pref
+80", "blackhole this /32 under attack"). **Large communities** (<RFCRef n={8092} />) restored room for
+32-bit ASNs that standard 32-bit communities couldn't express.
+
+<Callout variant="insight" title="Inbound vs. outbound traffic engineering — an asymmetry">
+You fully control your **outbound** path selection with **Local Preference** and **Weight**. You only
+*influence* your **inbound** traffic, because remote ASes make their own choices: **AS-Path prepending**
+(make a path look longer), **MED** (only to a directly-connected AS, only sometimes honored), and
+**communities** the upstream agrees to act on. Inbound TE is a negotiation, not a setting — the deepest
+practical truth in BGP operations.
+</Callout>
+
+## Convergence and stability (expert)
+
+BGP is **deliberately slow** — global stability outranks fast reaction. Key mechanisms:
+
+- **MRAI (Minimum Route Advertisement Interval)** — rate-limits UPDATEs per prefix per peer (≈30 s eBGP
+  default), damping churn at the cost of convergence time.
+- **Path hunting** — on withdrawal, a router may try successively longer alternate AS paths before
+  declaring a prefix dead, briefly exploring invalid routes. A fundamental path-vector behavior.
+- **Route-flap damping** (<RFCRef n={7454} />) — penalize and temporarily suppress prefixes that flap;
+  use carefully (it can over-suppress legitimate changes).
+- **BFD for BGP** — sub-second peer-failure detection without aggressive hold timers.
+- **Add-Path** — advertise *multiple* paths per prefix so RR clients can see backups and do ECMP, which
+  best-path's single-winner default otherwise hides.
+
+## Security considerations
+
+<Callout variant="security" title="BGP trusts what it's told — that's the whole problem">
+- **Prefix hijacking** — announcing a prefix you don't own (accidentally or maliciously) draws its
+  traffic to you. **RPKI + Route Origin Validation (ROV)** (<RFCRef n={6811} />) cryptographically binds
+  a prefix to its authorized origin ASN, so peers can drop **invalid** announcements.
+- **Route leaks** — violating the **valley-free / Gao-Rexford** rules (e.g. re-advertising a provider's
+  routes to another provider) turns a stub into unwanted transit. Defended with strict prefix/AS-path
+  filters and the **"down-only"** community signaling (RFC 9234 roles).
+- **AS_PATH manipulation** — forging a shorter path; **BGPsec** signs the path, but deployment is thin —
+  origin validation (RPKI) is the realistic defense today.
+- **Session attacks** — protect TCP 179 with **TCP-AO/MD5**, **GTSM/TTL-security** (eBGP is TTL 1, so
+  reject anything farther), and **`maximum-prefix`** limits so a misbehaving peer can't flood your RIB.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Stuck in Active/Connect** — the TCP 179 session can't establish: ACL blocking 179, no IGP route to
+  the peer, wrong neighbor address, or `update-source` mismatch on a loopback-based iBGP session.
+- **Established but no routes / not propagating** — missing **iBGP full mesh or RR**; or a route filtered
+  by an import/export policy; or **next-hop-self** not set so the NEXT_HOP is unreachable.
+- **Route present but not selected** — an **invalid/unreachable NEXT_HOP**, or it simply lost the
+  best-path decision (walk the steps above).
+- **Constant flapping** — an unstable link/peer; stabilize it, consider damping, and use BFD for clean
+  detection.
+- **`maximum-prefix` shutdown** — a peer sent more prefixes than your limit (often a leak); investigate
+  before raising the cap.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Two routes to a prefix: Path X has a 2-AS path and LOCAL_PREF 100; Path Y has a 4-AS path and LOCAL_PREF 200. Which does BGP pick?",
+      options: ["Path X — its AS-Path is shorter", "Path Y — Local Preference outranks AS-Path length", "Neither — they tie"],
+      answer: 1,
+      explanation: "Local Preference is evaluated well before AS-Path length in the decision process. Y's higher LOCAL_PREF (200) wins despite its longer AS path — exactly why operators use LOCAL_PREF for outbound traffic engineering.",
+    },
+    {
+      q: "Why must iBGP speakers form a full mesh (absent route reflectors or confederations)?",
+      options: [
+        "iBGP runs over UDP and can't detect loops",
+        "A router won't re-advertise an iBGP-learned route to another iBGP peer, so each must hear it directly",
+        "iBGP has no concept of AS numbers",
+      ],
+      answer: 1,
+      explanation: "Because the AS_PATH isn't modified within an AS, iBGP forbids re-advertising iBGP-learned routes to other iBGP peers (loop safety). Every iBGP speaker must therefore peer with every other — the n² problem RRs and confederations solve.",
+    },
+    {
+      q: "Your MED isn't influencing a neighbor's choice between two of your exits. The most likely default reason?",
+      options: [
+        "MED is compared only between routes from the same neighboring AS",
+        "MED is a Cisco-proprietary value",
+        "MED is evaluated before Local Preference",
+      ],
+      answer: 0,
+      explanation: "By default MED is only compared among paths received from the same neighboring AS. If the competing routes come from different ASes, the MED step is skipped unless `always-compare-med` is configured.",
+    },
+    {
+      q: "Which mechanism lets a peer cryptographically reject a prefix announced by an unauthorized origin AS?",
+      options: ["Route-flap damping", "RPKI Route Origin Validation (ROV)", "BGP communities"],
+      answer: 1,
+      explanation: "RPKI binds a prefix to its authorized origin ASN via signed ROAs; Route Origin Validation marks mismatched announcements Invalid so they can be dropped — the practical defense against prefix hijacks today.",
+    },
+  ]}
+/>

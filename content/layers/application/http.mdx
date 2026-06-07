@@ -1,0 +1,131 @@
+export const sources = [
+  { label: "RFC 9110 — HTTP Semantics", href: "https://www.rfc-editor.org/rfc/rfc9110.html" },
+  { label: "RFC 9112 — HTTP/1.1", href: "https://www.rfc-editor.org/rfc/rfc9112.html" },
+  { label: "RFC 9113 — HTTP/2", href: "https://www.rfc-editor.org/rfc/rfc9113.html" },
+  { label: "RFC 9114 — HTTP/3", href: "https://www.rfc-editor.org/rfc/rfc9114.html" },
+];
+
+## The web's request/response protocol
+
+HTTP is the [Application-layer](../../application/) protocol the web is built on: a client sends a
+**request**, a server returns a **response**, and that simple exchange — layered over a reliable
+transport ([TCP](../../transport/tcp/), or [QUIC](../../transport/quic/) for HTTP/3) and usually secured
+by [TLS](../../transport/tls/) — carries nearly everything you do online. Its core shape has been stable
+for 30 years even as the wire format underneath was reinvented twice.
+
+## Semantics: methods, status codes, headers
+
+- **Methods** state intent: **GET** (retrieve, safe & idempotent), **POST** (submit/create), **PUT**
+  (replace, idempotent), **PATCH** (partial update), **DELETE**, **HEAD** (headers only). Safe and
+  idempotent semantics are what let proxies cache and clients retry.
+- **Status codes** classify the result: **2xx** success, **3xx** redirection, **4xx** client error
+  (400, 401, 403, **404**), **5xx** server error (500, **503**). The first digit is the whole story.
+- **Headers** carry metadata: content type and length, caching directives, authentication,
+  compression ([`Content-Encoding: gzip/br`](../../presentation/compression/)), and more.
+
+<Callout variant="insight" title="HTTP is stateless — cookies bolt state back on">
+Every HTTP request is **independent**; the server remembers nothing between them by default. That
+statelessness is why HTTP scales so well (any server can handle any request). To build sessions
+(logins, carts), the server sets a **cookie** the browser returns on each subsequent request — or issues
+a token. State lives in that cookie/token and in server-side stores, **not** in the protocol. Caching,
+likewise, is a first-class feature: `Cache-Control`, `ETag`, and conditional requests let responses be
+reused without re-fetching.
+</Callout>
+
+## The version evolution — same semantics, faster wire
+
+The methods and headers barely changed; what changed is how requests are multiplexed onto a connection.
+
+**HTTP/1.1** sends one request at a time per connection. With keep-alive a connection is reused, but a
+slow response **blocks the ones behind it** (head-of-line blocking), so browsers open ~6 parallel
+connections per origin as a workaround.
+
+<SequenceDiagram
+  actors={["Browser", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "GET /index.html" },
+    { from: 1, to: 0, label: "200 OK (must finish before the next request)", dashed: true },
+    { from: 0, to: 1, label: "GET /style.css (waited its turn)" },
+    { from: 1, to: 0, label: "200 OK", dashed: true },
+  ]}
+  caption="HTTP/1.1: one outstanding request per connection. A slow response blocks everything queued behind it — application-level head-of-line blocking."
+/>
+
+**HTTP/2** multiplexes **many concurrent streams over one TCP connection**, with header compression
+(HPACK) and server push. It fixes HTTP-level blocking — but because it rides one TCP stream, a single
+lost packet still stalls *all* streams ([TCP-level HoL blocking](../../transport/quic/)).
+
+<SequenceDiagram
+  actors={["Browser", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "GET /index.html, /style.css, /app.js — interleaved streams" },
+    { from: 1, to: 0, label: "responses interleaved on one connection (HPACK-compressed headers)", dashed: true },
+  ]}
+  caption="HTTP/2: many streams share one connection, so requests no longer block each other at the HTTP layer — but they still share one TCP byte stream."
+/>
+
+**HTTP/3** moves onto **QUIC over UDP**, giving each stream independent delivery so one lost packet no
+longer stalls the others — eliminating transport HoL blocking and merging the TLS handshake for a faster
+start. (See the [QUIC page](../../transport/quic/) for the transport details.)
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **A POST executed twice after a retry** — POST isn't idempotent; use an idempotency key or PUT where
+  the operation must be safely retryable.
+- **Stale content after a deploy** — overly aggressive caching; fix `Cache-Control`/`ETag` and use
+  cache-busting asset URLs.
+- **Slow page despite a fast server (HTTP/1.1)** — head-of-line blocking and the 6-connection limit;
+  HTTP/2 multiplexing or HTTP/3 resolves it.
+- **502/504 from a proxy** — the upstream is down or slow, not the proxy; distinguish from a 500 the app
+  itself returned.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Securing the request/response">
+- **Always HTTPS** — plain HTTP is readable and modifiable on the path; **HSTS** forces TLS so an
+  attacker can't strip it.
+- **Cookie flags** — `Secure`, `HttpOnly`, and `SameSite` defend session cookies against theft and CSRF.
+- **CORS & CSP** — the browser's same-origin model plus explicit cross-origin and content-security
+  policies contain XSS and cross-site data leaks.
+- **Header injection / request smuggling** — inconsistent parsing of `Content-Length` vs.
+  `Transfer-Encoding` between proxies lets attackers smuggle a second request; normalize at the edge.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "HTTP is described as 'stateless.' How are logged-in sessions then maintained?",
+      options: [
+        "The TCP connection stays open for the whole session",
+        "The server stores no per-request state in the protocol; a cookie or token returned on each request carries the session identity",
+        "HTTP/2 adds state to the protocol",
+      ],
+      answer: 1,
+      explanation: "Each HTTP request is independent, which is key to scalability. Sessions are layered on top: the server sets a cookie (or issues a token) that the client sends with every subsequent request, so identity travels in the cookie and server-side store, not the protocol.",
+    },
+    {
+      q: "What did HTTP/2 fix, and what transport-level problem did it still leave for HTTP/3?",
+      options: [
+        "It encrypted HTTP; HTTP/3 made it faster",
+        "HTTP/2 multiplexes streams over one connection (no HTTP-level head-of-line blocking), but on a single TCP stream a lost packet still stalls all streams — which HTTP/3 over QUIC removes",
+        "HTTP/2 added new methods that HTTP/3 removed",
+      ],
+      answer: 1,
+      explanation: "HTTP/2 interleaves many streams over one TCP connection, ending HTTP-layer blocking. But all streams share one ordered TCP byte stream, so one lost segment blocks them all. HTTP/3 runs over QUIC, giving each stream independent delivery.",
+    },
+    {
+      q: "Why is it safe for a proxy to cache and a client to retry a GET, but risky for a POST?",
+      options: [
+        "GET is faster",
+        "GET is defined as safe and idempotent (no side effects, repeatable), while POST may create or change state, so repeating it can duplicate the effect",
+        "POST cannot be cached at all for security reasons",
+      ],
+      answer: 1,
+      explanation: "HTTP method semantics matter: GET is safe and idempotent, so caching and automatic retries are sound. POST is neither by definition, so a retry can perform the action twice — which is why idempotency keys or PUT are used where retries must be safe.",
+    },
+  ]}
+/>

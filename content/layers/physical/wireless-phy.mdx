@@ -1,0 +1,133 @@
+export const sources = [
+  { label: "IEEE 802.11 — Wireless LAN (PHY: DSSS, OFDM, MIMO, OFDMA)", href: "https://standards.ieee.org/ieee/802.11/" },
+  { label: "3GPP TS 38.211 — 5G NR Physical channels and modulation", href: "https://www.3gpp.org/dynareport/38211.htm" },
+  { label: "FCC / ITU — Unlicensed spectrum (2.4, 5, 6 GHz)", href: "https://www.fcc.gov/" },
+  { label: "Goldsmith, Wireless Communications (fading, MIMO)", href: "https://www.cambridge.org/" },
+];
+
+## Why the air is the hardest medium
+
+A wire is a private, stable channel; the air is a **shared, hostile, time-varying** one. A wireless PHY
+fights problems no cable has:
+
+- **Shared spectrum** — everyone on a band contends for the same Hz, much of it unlicensed and crowded.
+- **Multipath fading** — the signal arrives via several reflected paths that add up constructively or
+  destructively, so received strength swings wildly with tiny movements.
+- **Attenuation & interference** — distance, walls, and other emitters erode the SNR that
+  [Shannon's limit](../modulation-capacity/) depends on.
+- **Mobility / Doppler** — motion shifts frequencies and changes the channel continuously.
+- **Half-duplex** — a radio can't usually transmit and receive on the same channel at once.
+
+Everything below is a technique for wringing reliable bits out of that mess.
+
+## Spectrum and channels
+
+Wi-Fi lives in unlicensed bands with very different characteristics: **2.4 GHz** travels far and
+penetrates walls but is crowded and has only **three non-overlapping 20 MHz channels**; **5 GHz** offers
+many more channels and width at shorter range; **6 GHz** (Wi-Fi 6E/7) adds a large, clean swath.
+Cellular instead uses **licensed** bands an operator owns exclusively — paying for spectrum to guarantee
+interference-free service. Wider channels (20 → 40 → 80 → 160 → 320 MHz) carry more bits, but there are
+fewer of them, so width trades capacity against the ability to avoid neighbors.
+
+## Spread spectrum
+
+Early Wi-Fi (and GPS, and 3G) deliberately **spread** each bit across far more bandwidth than it needs:
+
+- **DSSS** (Direct-Sequence) multiplies each data bit by a faster **chipping code**. The receiver, which
+  knows the code, correlates to recover the bit — gaining **processing gain** that pulls the signal out
+  from under noise and narrowband interference, and lets multiple coded users share one band (the basis
+  of **CDMA** in 3G).
+- **FHSS** (Frequency-Hopping) rapidly hops the carrier across many frequencies in a known pattern, so a
+  jammer or interferer on any one frequency only clips a fraction of the transmission (used by classic
+  Bluetooth).
+
+Spreading buys **robustness and sharing** at the cost of raw spectral efficiency — which is why modern
+high-rate Wi-Fi moved to OFDM instead.
+
+## OFDM and OFDMA
+
+[OFDM](../modulation-capacity/) splits the channel into hundreds of narrow, orthogonal subcarriers, each
+a slow QAM stream — the key to surviving multipath, and the foundation of Wi-Fi 5+, LTE, and 5G.
+**OFDMA** (Wi-Fi 6 / LTE-A) goes further: it slices those subcarriers into **resource units** and hands
+*different groups to different users simultaneously*. Instead of one device owning the whole channel per
+turn, many share it at once — slashing latency and overhead for the dense, many-small-device traffic of
+modern networks.
+
+## MIMO and beamforming
+
+Multiple antennas turn multipath from an enemy into an asset:
+
+- **Spatial multiplexing (MIMO)** — send **independent data streams** from multiple antennas at once;
+  the receiver's multiple antennas, seeing different mixes of the streams, solve them apart. *N* streams
+  ≈ *N*× the throughput, the headline rate-multiplier of modern Wi-Fi.
+- **Diversity** — send the *same* data over several paths so a fade on one doesn't kill the link
+  (reliability instead of speed).
+- **MU-MIMO** — serve **several users** their own streams simultaneously from one access point.
+- **Beamforming** — phase the antennas so the signal **adds up in the direction of the client**,
+  improving SNR and range. **Massive MIMO** (5G) scales this to dozens of antennas for tight,
+  steerable beams.
+
+<Callout variant="insight" title="The radio adapts every transmission to the channel">
+There's no single "Wi-Fi speed." The radio constantly picks a **Modulation and Coding Set (MCS)** —
+a QAM order (BPSK … 1024-QAM) plus a [forward-error-correction](../../data-link/error-detection/) rate —
+matched to the SNR it currently measures. Strong signal → dense QAM, light coding, high rate; weak signal
+→ rugged BPSK, heavy coding, low rate but still connected. Combined with channel width and spatial
+streams, that's why the *same* link reports wildly different rates as you move around.
+</Callout>
+
+<Callout variant="history" title="The generations, in one line each">
+**Wi-Fi:** 4 (802.11n, MIMO+40 MHz) → 5 (ac, wider 5 GHz, MU-MIMO) → 6/6E (ax, OFDMA + 6 GHz) → 7 (be,
+320 MHz, 4096-QAM, multi-link). **Cellular:** 3G (CDMA spread spectrum) → 4G LTE (OFDMA) → 5G NR (massive
+MIMO, mmWave, flexible numerology). Each leap is mostly a **PHY** story: more spectrum, denser
+modulation, and more antennas.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in the wireless PHY">
+- **Great signal bars, terrible throughput** — co-channel interference/contention: many radios sharing
+  one channel. Pick a cleaner channel, narrow the width, or move to 5/6 GHz.
+- **Throughput collapses as you walk away** — falling SNR forcing a lower MCS (1024-QAM → … → BPSK); the
+  link rate steps down to stay error-free.
+- **Erratic performance when standing still near metal/glass** — multipath fading nulls; MIMO/diversity
+  and small position changes help.
+- **2.4 GHz unusable in a dense area** — only three non-overlapping channels, all saturated; the band is
+  full, not broken.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "What does spatial multiplexing (MIMO) do to increase throughput?",
+      options: [
+        "It uses a wider channel",
+        "It sends independent data streams from multiple antennas at once, and the receiver's antennas separate them — multiplying the rate",
+        "It increases the transmit power",
+      ],
+      answer: 1,
+      explanation: "MIMO exploits multipath: multiple antennas send separate streams simultaneously, and the receiver's multiple antennas, each seeing a different combination, solve them apart. N spatial streams give roughly N times the throughput.",
+    },
+    {
+      q: "How does OFDMA improve on plain OFDM for modern dense networks?",
+      options: [
+        "It uses licensed spectrum",
+        "It subdivides the subcarriers into resource units assigned to multiple users simultaneously, instead of one device owning the whole channel per turn",
+        "It removes the need for error correction",
+      ],
+      answer: 1,
+      explanation: "OFDM gives one device the whole channel at a time; OFDMA partitions the subcarriers into resource units served to many users at once, cutting latency and overhead for lots of small, simultaneous transmissions.",
+    },
+    {
+      q: "Why does the same Wi-Fi link report very different data rates as you move around?",
+      options: [
+        "The standard changes",
+        "The radio adapts its Modulation and Coding Set (QAM order + FEC rate) to the current SNR — dense modulation when strong, rugged when weak",
+        "The channel width is fixed by law",
+      ],
+      answer: 1,
+      explanation: "There's no single rate: the radio continuously selects an MCS matched to the measured SNR, dropping to lower-order modulation and heavier coding as the signal weakens — so the rate tracks your position and the channel.",
+    },
+  ]}
+/>

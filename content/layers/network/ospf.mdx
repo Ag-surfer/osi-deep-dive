@@ -1,0 +1,273 @@
+export const sources = [
+  { label: "RFC 2328 — OSPF Version 2", href: "https://www.rfc-editor.org/rfc/rfc2328.html" },
+  { label: "RFC 5340 — OSPF for IPv6 (OSPFv3)", href: "https://www.rfc-editor.org/rfc/rfc5340.html" },
+  { label: "RFC 3101 — The OSPF Not-So-Stubby Area (NSSA) Option", href: "https://www.rfc-editor.org/rfc/rfc3101.html" },
+  { label: "RFC 2740 / 5838 — OSPFv3 address families", href: "https://www.rfc-editor.org/rfc/rfc5838.html" },
+  { label: "Dijkstra, 'A Note on Two Problems in Connexion with Graphs' (1959)", href: "https://doi.org/10.1007/BF01386390" },
+];
+
+## Where OSPF sits
+
+OSPF is a **link-state interior gateway protocol (IGP)** — it routes *within* a single autonomous
+system, where BGP routes *between* them. If the [routing concepts](../routing-concepts/) page is the
+theory, OSPF is the canonical link-state implementation: every router floods a description of its own
+links, every router assembles the identical map, and every router independently runs **Dijkstra's SPF**
+to compute its own shortest-path tree. No rumor, fast convergence, and — crucially — a design that
+*scales* through areas.
+
+<Callout variant="insight" title="The five things OSPF does, in order">
+1. **Discover neighbors** with Hello packets on each interface.
+2. **Form adjacencies** and synchronize the **Link-State Database (LSDB)** with them.
+3. **Flood LSAs** so every router in the area holds an identical LSDB.
+4. **Run SPF (Dijkstra)** over that LSDB to build a shortest-path tree rooted at itself.
+5. **Install** the resulting best routes into the RIB/FIB, and reflood/recompute on any change.
+</Callout>
+
+## Neighbors and adjacencies
+
+OSPF speaks directly to IP, **protocol 89**, using multicast `224.0.0.5` (AllSPFRouters) and
+`224.0.0.6` (AllDRouters). **Hello** packets (every 10 s on broadcast links, 30 s on NBMA by default)
+discover neighbors and act as keepalives — miss the **dead interval** (4× hello) and the neighbor is
+torn down.
+
+Two routers only become **neighbors** if a set of Hello parameters match exactly. A mismatch here is
+the single most common "why won't OSPF come up?" cause:
+
+<Callout variant="warning" title="Must match to form an adjacency">
+- **Area ID** — interfaces must be in the same area.
+- **Hello and Dead intervals** — must be identical.
+- **Subnet / mask** — neighbors must share the IP subnet (OSPFv2).
+- **Authentication** — type and key must match.
+- **Stub/area flags** (E-bit, N-bit) — a stub router won't peer with a non-stub.
+- **MTU** — must match, or the adjacency hangs in **EXSTART** (see troubleshooting).
+</Callout>
+
+Becoming neighbors (2-Way) is not the same as becoming **fully adjacent** (Full) — only fully adjacent
+routers exchange the complete LSDB. The bring-up walks a state machine:
+
+<SequenceDiagram
+  actors={["Router A", "Router B"]}
+  steps={[
+    { from: 0, to: 1, label: "Hello (neighbors: none) — Down → Init" },
+    { from: 1, to: 0, label: "Hello (neighbors: A) — B has seen A", dashed: true },
+    { from: 0, to: 1, label: "Hello (neighbors: B) — bidirectional → 2-Way" },
+    { from: 0, to: 1, label: "ExStart: negotiate master/slave via empty DBDs" },
+    { from: 1, to: 0, label: "Exchange: DBD packets summarize each LSDB", dashed: true },
+    { from: 0, to: 1, label: "Loading: LSR → LSU → LSAck fill the gaps" },
+    { from: 1, to: 0, label: "Full: LSDBs identical — adjacency complete", dashed: true },
+  ]}
+  caption="Down → Init → 2-Way → ExStart → Exchange → Loading → Full. On multi-access links, DROthers stop at 2-Way with each other and only go Full with the DR/BDR."
+/>
+
+## DR/BDR election: taming the n² problem
+
+On a multi-access segment (Ethernet) with *n* routers, forming a full mesh of adjacencies would need
+`n(n−1)/2` of them, and every router would flood to every other — an LSA storm that scales quadratically.
+OSPF elects a **Designated Router (DR)** and **Backup DR (BDR)** so the segment behaves like a hub: all
+routers form Full adjacencies **only with the DR and BDR**, and the DR originates a single **Type-2
+Network LSA** representing the segment.
+
+- Election is by highest **interface priority** (default 1; priority 0 = never DR), tie-broken by
+  highest **Router ID**.
+- The election is **non-preemptive** — a higher-priority router added later does *not* seize the role.
+- DROther↔DROther pairs deliberately rest in **2-Way**; that is healthy, not a fault.
+- DR/BDR live on `224.0.0.6`; others send updates there and the DR refloods to `224.0.0.5`.
+
+<Callout variant="note" title="Network types change the rules">
+DR/BDR election only happens on **broadcast** and **non-broadcast (NBMA)** networks.
+**Point-to-point** and **point-to-multipoint** links elect no DR (there's no n² problem on a P2P link).
+Mismatched network types across a link (e.g. one side broadcast, one side P2P) is a classic adjacency
+failure — Hellos are sent to the wrong place.
+</Callout>
+
+## The link-state database: LSA types
+
+The LSDB is built from **Link-State Advertisements**. Knowing the LSA types *is* knowing how OSPF
+scales and where information stops at area boundaries — each type has a defined originator and flooding
+scope.
+
+| Type | Name | Originated by | Flooding scope | Describes |
+| --- | --- | --- | --- | --- |
+| **1** | Router LSA | Every router | Within its area | The router's own interfaces, their costs and states |
+| **2** | Network LSA | The DR | Within the area | Which routers are attached to a multi-access segment |
+| **3** | Summary LSA | ABR | Into adjacent areas | An inter-area prefix (network reachability across areas) |
+| **4** | ASBR Summary | ABR | Into adjacent areas | How to reach the ASBR that owns Type-5s |
+| **5** | AS-External | ASBR | Whole AS (except stub/NSSA) | A route redistributed into OSPF from outside |
+| **7** | NSSA External | ASBR in an NSSA | Within the NSSA | Externals in a not-so-stubby area (ABR translates to Type-5) |
+
+<Callout variant="insight" title="Why Type 1 and 2 never leave the area">
+Router (1) and Network (2) LSAs describe the *detailed topology* — and SPF runs on exactly those.
+Keeping them inside the area is what bounds the LSDB and the SPF run. The ABR translates intra-area
+topology into **distance-only Type-3 summaries** for other areas: neighbors learn *that* a prefix is
+reachable and *at what cost*, but not the internal graph. That information hiding is the whole scaling
+story.
+</Callout>
+
+## Areas and the two-level hierarchy
+
+OSPF forces a strict two-level hierarchy: a **backbone area (Area 0)** that every other area must touch,
+directly or through a **virtual link**. Routers are classified by where they sit:
+
+- **Internal router** — all interfaces in one area.
+- **ABR (Area Border Router)** — straddles Area 0 and one or more other areas; generates Type-3/4
+  summaries and is the natural **summarization** point (`area range`).
+- **ASBR (AS Boundary Router)** — injects external routes (redistribution) as Type-5 (or Type-7 in an
+  NSSA).
+- **Backbone router** — has at least one interface in Area 0.
+
+<Callout variant="warning" title="The 'no transit through a non-backbone area' rule">
+Inter-area traffic must pass through Area 0. Two non-backbone areas cannot exchange routes directly —
+their ABRs only talk to each other across the backbone. If an area is physically detached from Area 0,
+you bridge it with a **virtual link** through a transit area (a design smell, not a goal).
+</Callout>
+
+### Stub area types
+
+Areas can suppress LSA types they don't need, trading granular external knowledge for a smaller LSDB
+and a default route. This is core CCNP/expert material — what each type blocks:
+
+| Area type | Blocks | Default route | Typical use |
+| --- | --- | --- | --- |
+| **Standard** | nothing | none | Normal area with full visibility |
+| **Stub** | Type 5 (externals) | ABR injects a default | Edge area that doesn't need external routes |
+| **Totally stubby** | Types 3, 4, 5 | ABR injects a default | Cisco; minimal LSDB at the network edge |
+| **NSSA** | Type 5 | optional | A stub area that still has its *own* ASBR (Type-7) |
+| **Totally NSSA** | Types 3, 4, 5 | ABR injects a default | NSSA + inter-area summary suppression |
+
+## SPF: Dijkstra over the LSDB
+
+Once the LSDB is synchronized, each router runs **Dijkstra's shortest-path-first** with *itself* as the
+root. It settles routers in increasing cost order, relaxing each newly-settled router's links, until
+every reachable router is on the tree. The link metric is **cost = reference-bandwidth ÷ interface-
+bandwidth** — beware the [reference-bandwidth trap](../routing-concepts/) (the 100 Mbps default ties all
+fast links at cost 1).
+
+Step through the exact computation a real router performs:
+
+<DijkstraViz
+  source="R1"
+  nodes={[
+    { id: "R1", x: 70, y: 160, label: "R1" },
+    { id: "R2", x: 250, y: 70, label: "R2" },
+    { id: "R3", x: 250, y: 250, label: "R3" },
+    { id: "R4", x: 460, y: 70, label: "R4" },
+    { id: "R5", x: 460, y: 250, label: "R5" },
+  ]}
+  edges={[
+    { a: "R1", b: "R2", cost: 2 },
+    { a: "R1", b: "R3", cost: 5 },
+    { a: "R2", b: "R3", cost: 2 },
+    { a: "R2", b: "R4", cost: 3 },
+    { a: "R3", b: "R5", cost: 3 },
+    { a: "R4", b: "R5", cost: 1 },
+  ]}
+  caption="SPF from R1. Watch R3 improve from 5 (direct R1–R3) to 4 (via R2), and R5 from 7 (via R3) to 6 (via R4) — the heart of edge relaxation. Green = on the shortest-path tree; amber dashed = the link being relaxed this step."
+/>
+
+When two paths tie on cost, OSPF installs **all** of them (**ECMP**) and load-shares per flow. SPF is
+`O(E log V)`; areas keep `V` and `E` small enough that recomputation stays cheap even in large networks.
+
+### Path preference and external metric types
+
+A router may learn the same prefix several ways; OSPF prefers them in a fixed order regardless of cost:
+
+**Intra-area (O)** → **Inter-area (O IA)** → **External Type 1 (E1)** → **External Type 2 (E2)**.
+
+- **E2** (the default for redistributed routes) carries a **fixed** external metric — the internal cost
+  to reach the ASBR is *ignored*. Two routers far apart see the same E2 cost.
+- **E1** adds the internal cost-to-ASBR to the external metric, so it reflects true distance. Prefer E1
+  when multiple ASBRs advertise the same external and you want the nearest one chosen.
+
+## Convergence and scaling (expert tuning)
+
+Link-state converges fast, but uncontrolled flooding/SPF can itself become the problem at scale:
+
+- **SPF throttling** (`spf-timers`) — exponential backoff between SPF runs so a flapping link can't pin
+  the CPU re-running Dijkstra.
+- **LSA throttling / pacing** — rate-limit LSA generation and group refreshes; the periodic LSA refresh
+  is every 1800 s, and an LSA ages out at **MaxAge 3600 s**.
+- **Incremental SPF (iSPF)** — recompute only the affected subtree, not the whole tree.
+- **BFD** — sub-second failure detection decoupled from the (coarser) Hello/Dead timers, so OSPF reacts
+  in milliseconds without aggressive Hellos.
+- **ABR summarization** (`area range`) — a single summary hides dozens of intra-area prefixes *and*
+  stops their flaps from rippling into other areas. The most effective scaling lever OSPF has.
+
+<Callout variant="history" title="OSPFv3: OSPF for IPv6">
+**OSPFv3** (<RFCRef n={5340} />) is a near-rewrite for IPv6. It runs **per-link, not per-subnet**
+(adjacencies form on link-local addresses, and an address mismatch no longer blocks them), moves
+addressing *out* of the Router/Network LSAs into new **Type-8 Link** and **Type-9 Intra-Area-Prefix**
+LSAs (so the topology and the addressing are decoupled), and originally delegated authentication to
+**IPsec** rather than carrying its own. Same SPF, same area model — a cleaner separation of topology
+from addressing.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Stuck in EXSTART/EXCHANGE** — almost always an **MTU mismatch**; the DBD with the larger MTU is
+  dropped. Match MTUs or `ip ospf mtu-ignore`.
+- **Neighbors never pass 2-Way (on Ethernet)** — usually *normal* DROther↔DROther behavior. Only the
+  DR/BDR go Full. A genuine problem if it's a P2P link.
+- **Adjacency never forms** — mismatched Hello/Dead timers, area IDs, subnet/mask, authentication, or
+  stub flags. Walk the must-match list above.
+- **Duplicate Router ID** — two routers with the same RID corrupt the LSDB; routes flap or vanish. RIDs
+  must be unique AS-wide.
+- **Suboptimal paths on fast links** — the reference-bandwidth trap; raise `auto-cost reference-
+  bandwidth` consistently everywhere.
+- **Constant SPF churn** — a flapping interface flooding LSAs; stabilize the link, enable SPF/LSA
+  throttling, and summarize at the ABR to contain the blast radius.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface at the control plane">
+- **Authenticate adjacencies** — OSPFv2 supports null, plaintext (useless), and **MD5/HMAC-SHA**
+  cryptographic auth; OSPFv3 uses IPsec AH/ESP. Without it, anyone on the segment can inject LSAs and
+  reshape routing.
+- **`passive-interface`** on any interface with no legitimate OSPF neighbor (LANs facing hosts) — stops
+  Hellos from leaking and blocks rogue-router peering.
+- **TTL security / GTSM** — OSPF is link-local (TTL 1 for multicast), so off-link attackers can't reach
+  it; enforce it.
+- **Fabricated/maximum-age LSA injection** and **MaxAge flooding** are the classic link-state attacks —
+  authentication plus filtering what you accept is the defense, exactly as on every other routing
+  protocol.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "On a broadcast Ethernet segment with five OSPF routers, how many routers does a DROther form a FULL adjacency with?",
+      options: ["All four others", "Only the DR and BDR (two)", "None — DROthers stay in 2-Way with everyone"],
+      answer: 1,
+      explanation: "DROthers form FULL adjacencies only with the DR and BDR, and rest in 2-Way with each other. That's what collapses the n² adjacency mesh into a hub-and-spoke around the DR.",
+    },
+    {
+      q: "An OSPF adjacency is stuck in EXSTART. The most likely cause?",
+      options: ["Mismatched OSPF area IDs", "An IP MTU mismatch between the two interfaces", "Different OSPF process IDs"],
+      answer: 1,
+      explanation: "EXSTART/EXCHANGE hangs are the signature of an MTU mismatch: the larger-MTU DBD is dropped, so the database exchange never completes. (Process IDs are locally significant and need not match at all.)",
+    },
+    {
+      q: "Why does an ABR translate area topology into Type-3 summary LSAs instead of flooding the Router/Network LSAs across areas?",
+      options: [
+        "Type-3 LSAs are encrypted",
+        "To hide intra-area topology and bound the LSDB/SPF — other areas learn reachability and cost, not the internal graph",
+        "Because Type-1 LSAs cannot cross routers",
+      ],
+      answer: 1,
+      explanation: "SPF runs on Type-1/2 (detailed topology). Confining them to the area and exporting only distance-bearing Type-3 summaries is exactly what keeps the LSDB small and makes OSPF scale.",
+    },
+    {
+      q: "A redistributed route is advertised as External Type 2 (E2). How does its cost appear to routers far from the ASBR?",
+      options: [
+        "It grows with the internal cost to reach the ASBR",
+        "It is the same fixed external metric everywhere — internal cost is ignored",
+        "It is unreachable outside the ASBR's area",
+      ],
+      answer: 1,
+      explanation: "E2 (the default) carries a fixed external metric and ignores the internal cost-to-ASBR. Use E1 instead when you want the metric to reflect true distance and pick the nearest ASBR.",
+    },
+  ]}
+/>

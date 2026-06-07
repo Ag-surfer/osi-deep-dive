@@ -1,0 +1,120 @@
+export const sources = [
+  { label: "RFC 2131 — Dynamic Host Configuration Protocol", href: "https://www.rfc-editor.org/rfc/rfc2131.html" },
+  { label: "RFC 2132 — DHCP Options and BOOTP Vendor Extensions", href: "https://www.rfc-editor.org/rfc/rfc2132.html" },
+  { label: "RFC 3046 — DHCP Relay Agent Information Option (Option 82)", href: "https://www.rfc-editor.org/rfc/rfc3046.html" },
+  { label: "RFC 8415 — DHCP for IPv6 (DHCPv6)", href: "https://www.rfc-editor.org/rfc/rfc8415.html" },
+];
+
+## Bootstrapping a host onto the network
+
+A device that just booted knows nothing: no [IP address](../../network/), no subnet mask, no default
+gateway, no [DNS](../dns/) server. **DHCP** automates that configuration so a laptop or phone joins any
+network without manual setup. It's an [Application-layer](../../application/) protocol with a chicken-and-
+egg twist — the client needs to talk to a server before it has an IP — solved with **broadcast**.
+
+## The DORA exchange
+
+DHCP configures a host in four messages, mnemonically **DORA**. Because the client has no address yet, it
+sends from `0.0.0.0` to the broadcast address `255.255.255.255`:
+
+<SequenceDiagram
+  actors={["Client (0.0.0.0)", "DHCP Server"]}
+  steps={[
+    { from: 0, to: 1, label: "DHCPDISCOVER — broadcast: 'who can configure me?'" },
+    { from: 1, to: 0, label: "DHCPOFFER — 'here's 192.0.2.50, 8h lease, gateway, DNS'", dashed: true },
+    { from: 0, to: 1, label: "DHCPREQUEST — broadcast: 'I'll take 192.0.2.50'" },
+    { from: 1, to: 0, label: "DHCPACK — confirmed: IP + mask + gateway + DNS + options", dashed: true },
+  ]}
+  caption="Discover, Offer, Request, Acknowledge. The Request is broadcast (not unicast) so that any other servers that made an offer see it was declined and return their addresses to the pool."
+/>
+
+<Callout variant="insight" title="Why Request is broadcast, and what's in the Ack">
+Several DHCP servers may answer a Discover. The client picks one offer but **broadcasts** its Request, so
+the *other* servers hear that their offer wasn't taken and free the address they had reserved. The final
+**Ack** delivers far more than an IP: the **subnet mask**, **default gateway**, **DNS servers**, lease
+time, and dozens of optional parameters (domain name, NTP servers, PXE boot file, and vendor options).
+DHCP is how almost every networked device learns *everything* it needs to participate.
+</Callout>
+
+## Leases and renewal
+
+An address is a **lease**, not a gift — granted for a fixed time so the pool recycles as devices come and
+go. The client renews automatically: at **50% of the lease (T1)** it unicasts a renewal to its server;
+if that fails, at **87.5% (T2)** it broadcasts to *any* server (rebinding); if the lease fully expires it
+must start over. A clean shutdown can send **DHCPRELEASE** to return the address early.
+
+## Relay agents: DHCP across subnets
+
+DHCP's discovery is **broadcast**, and routers don't forward broadcasts — so a single central DHCP server
+couldn't serve other subnets. A **relay agent** (a router with an `ip helper-address`) catches the
+broadcast and **unicasts** it to the central server, tagging it with which subnet it came from so the
+server picks the right pool. This is what lets one DHCP server configure an entire campus.
+
+<Callout variant="note" title="The IPv6 alternative: SLAAC">
+IPv6 can configure addresses **without** a DHCP server at all, via **SLAAC** (Stateless Address
+Autoconfiguration): the router advertises a prefix, and the host forms its own address from it. **DHCPv6**
+still exists for handing out DNS servers and other options, often *alongside* SLAAC — a different
+division of labor than IPv4's all-in-one DHCP.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Host self-assigns a 169.254.x.x address (APIPA)** — it got no DHCP response at all: no server
+  reachable, a dead relay/`ip helper`, or a broken link.
+- **Intermittent 'no address available'** — the **pool is exhausted** (too small for the device count, or
+  leases too long with high churn); enlarge the pool or shorten leases.
+- **Duplicate IP / address conflicts** — a static IP overlapping the DHCP range, or two servers with
+  overlapping pools.
+- **Wrong subnet's address handed out** — relay/Option 82 misconfiguration so the server picks the wrong
+  pool.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="An unauthenticated broadcast protocol">
+- **Rogue DHCP server** — anyone on the LAN can answer a Discover, handing out a malicious gateway/DNS to
+  become a man-in-the-middle. Defense: **DHCP snooping** marks only designated ports as trusted and drops
+  server messages from the rest.
+- **DHCP starvation** — flooding Discovers with spoofed MACs to drain the pool (a DoS); **port security**
+  and snooping rate-limits defend it.
+- **No authentication** — DHCP has essentially none, which is exactly why the switch-level protections
+  (snooping, port security, 802.1X before granting access) carry the load.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why does the client broadcast its DHCPREQUEST instead of unicasting it to the chosen server?",
+      options: [
+        "It still has no IP address to unicast from",
+        "So that other DHCP servers that made offers learn theirs was declined and can return the reserved address to the pool",
+        "Broadcast is faster than unicast",
+      ],
+      answer: 1,
+      explanation: "Multiple servers may have offered an address and reserved it. Broadcasting the Request tells the non-chosen servers their offer wasn't accepted, so they free the address they held — keeping the pool from leaking.",
+    },
+    {
+      q: "A central DHCP server must configure hosts on many subnets, but routers don't forward broadcasts. What bridges the gap?",
+      options: [
+        "The host unicasts directly to the server",
+        "A relay agent (ip helper-address) on each subnet catches the broadcast and unicasts it to the central server, tagging the originating subnet",
+        "DHCP uses multicast instead",
+      ],
+      answer: 1,
+      explanation: "DHCP discovery is broadcast and stays on the local segment. A relay agent forwards it as a unicast to the central server and marks which subnet it came from, so one server can serve many subnets with the right pool for each.",
+    },
+    {
+      q: "How does DHCP snooping defend against a rogue DHCP server?",
+      options: [
+        "It encrypts DHCP messages",
+        "It designates only certain switch ports as trusted for server messages and drops DHCP offers/acks arriving on untrusted (user) ports",
+        "It requires a password to get an address",
+      ],
+      answer: 1,
+      explanation: "DHCP itself isn't authenticated, so the switch enforces trust: server-side messages are only honored on trusted uplink ports, and any offer/ack from a user port (a rogue server) is dropped — preventing the malicious gateway/DNS handout.",
+    },
+  ]}
+/>

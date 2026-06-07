@@ -1,0 +1,123 @@
+export const sources = [
+  { label: "Huffman, 'A Method for the Construction of Minimum-Redundancy Codes' (1952)", href: "https://ieeexplore.ieee.org/document/4051119" },
+  { label: "Ziv & Lempel, 'A Universal Algorithm for Sequential Data Compression' (1977, LZ77)", href: "https://ieeexplore.ieee.org/document/1055714" },
+  { label: "RFC 1951 — DEFLATE Compressed Data Format", href: "https://www.rfc-editor.org/rfc/rfc1951.html" },
+  { label: "RFC 7932 — Brotli Compressed Data Format", href: "https://www.rfc-editor.org/rfc/rfc7932.html" },
+];
+
+## Why compression is possible
+
+The [Presentation layer](../../presentation/) prepares the application's data for the wire, and one of
+its biggest jobs is making that data **smaller**. Compression works because real data is **redundant** —
+some symbols are far more common than others, and patterns repeat. Information theory puts a floor on it:
+a source's **entropy** is the average number of bits genuinely needed per symbol. Compression's goal is
+to spend bits in proportion to *surprise* — short codes for the predictable, long codes for the rare —
+squeezing the representation down toward that entropy floor. Two big families do this: **entropy coding**
+(optimize the code per symbol) and **dictionary coding** (replace repeated strings with references).
+
+## Entropy coding: Huffman
+
+**Huffman coding** builds the optimal **prefix-free** code for a known set of symbol frequencies: no
+code is a prefix of another (so the stream decodes unambiguously with no delimiters), and the most
+frequent symbols get the shortest codes. It builds the tree bottom-up, repeatedly merging the two
+lowest-frequency nodes. Step through it:
+
+<HuffmanViz
+  symbols={[
+    { char: "f", freq: 45 },
+    { char: "e", freq: 16 },
+    { char: "d", freq: 13 },
+    { char: "c", freq: 12 },
+    { char: "b", freq: 9 },
+    { char: "a", freq: 5 },
+  ]}
+/>
+
+<Callout variant="insight" title="Why the prefix-free property matters">
+Because no code is a prefix of another, a decoder can read bits and emit a symbol the instant it matches
+a leaf — no separators, no ambiguity. And because the tree places frequent symbols shallow, the
+**average** code length drops below the fixed-length `⌈log₂(alphabet)⌉` bits. Here, ~2.24 bits/symbol vs.
+3 for a fixed code — and the bigger the frequency skew, the bigger the win. **Arithmetic / range coding**
+(and modern **ANS**) push even closer to the entropy limit by coding fractions of a bit per symbol.
+</Callout>
+
+## Dictionary coding: LZ77 and friends
+
+Huffman exploits symbol *frequency*; it can't capture that the word "the" repeats a thousand times. The
+**Lempel–Ziv** family does. **LZ77** slides a window over the data and replaces a repeated string with a
+**(distance, length)** back-reference to its earlier occurrence — "go back 80 bytes and copy 12." LZ78/
+**LZW** instead build an explicit dictionary of seen strings (LZW famously powered GIF and `compress`).
+Dictionary coding turns repetition into tiny pointers.
+
+<Callout variant="note" title="DEFLATE: the workhorse — both at once">
+The most-deployed lossless format, **DEFLATE** (<RFCRef n={1951} />), combines them: **LZ77** first
+replaces repeats with back-references, then **Huffman** entropy-codes the resulting symbols and
+distances. That two-stage pipeline is what powers **gzip**, **zlib**, **PNG**, and the classic HTTP
+`Content-Encoding: gzip`. Modern successors trade more CPU/memory for better ratios: **Brotli**
+(<RFCRef n={7932} />, with a built-in dictionary of common web strings) for HTTP, and **Zstandard
+(zstd)** for fast general-purpose compression — both now common as HTTP content encodings.
+</Callout>
+
+## Lossless vs. lossy
+
+Everything above is **lossless** — decompression reproduces the input bit-for-bit, mandatory for text,
+code, and archives. **Lossy** compression instead *discards information the human senses barely notice*,
+achieving far smaller files for media:
+
+- **JPEG** transforms image blocks with the **Discrete Cosine Transform**, then quantizes away
+  high-frequency detail the eye is insensitive to (then Huffman-codes the rest).
+- **H.264/H.265/AV1** add motion compensation between video frames; **MP3/AAC/Opus** drop sounds masked
+  by louder ones (psychoacoustics).
+
+The dial is **rate vs. distortion**: spend more bits for higher fidelity, fewer for a smaller file. The
+choice between lossless and lossy is a data-type decision the Presentation layer makes for the
+application.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Pitfalls of compression">
+- **Already-compressed data won't shrink** — re-gzipping a JPEG or a zip wastes CPU for ~0% gain;
+  there's no redundancy left to exploit.
+- **CRIME / BREACH attacks** — compressing **secret + attacker-controlled** data together leaks the
+  secret through the compressed *size*; never compress mixed-trust content under TLS without mitigation.
+- **Decompression bombs** — a tiny archive that expands to gigabytes (a DoS); bound the output size.
+- **CPU vs. ratio** — Brotli/zstd at max level can cost more time than they save on a fast link;
+  match the level to the use (precompress static assets, go light on dynamic ones).
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "What makes a Huffman code unambiguously decodable without delimiters?",
+      options: [
+        "All codes are the same length",
+        "It is prefix-free: no symbol's code is a prefix of another's, so a decoder emits a symbol the moment the bits reach a leaf",
+        "Each code ends in a 0",
+      ],
+      answer: 1,
+      explanation: "Huffman codes are prefix-free, so as the decoder reads bits it can never confuse a complete code with the start of a longer one — it emits a symbol exactly when it reaches a tree leaf, no separators needed.",
+    },
+    {
+      q: "How does dictionary (LZ77) compression differ from Huffman coding?",
+      options: [
+        "LZ77 assigns shorter codes to frequent symbols",
+        "LZ77 replaces repeated strings with (distance, length) back-references to earlier occurrences, exploiting repetition rather than symbol frequency",
+        "LZ77 is lossy",
+      ],
+      answer: 1,
+      explanation: "Huffman optimizes per-symbol code length by frequency; LZ77 captures repetition by pointing back to a previous copy of a repeated string. DEFLATE uses LZ77 then Huffman to exploit both.",
+    },
+    {
+      q: "What fundamentally distinguishes lossy compression (JPEG, H.264) from lossless?",
+      options: [
+        "Lossy is always faster",
+        "Lossy permanently discards information (detail the senses barely notice) for much smaller files; lossless reproduces the input bit-for-bit",
+        "Lossy only works on text",
+      ],
+      answer: 1,
+      explanation: "Lossless decompression recovers the exact input — required for text and code. Lossy throws away perceptually unimportant information (e.g. high-frequency image detail) to achieve far higher compression, suitable for media.",
+    },
+  ]}
+/>

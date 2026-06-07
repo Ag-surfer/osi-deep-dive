@@ -1,0 +1,154 @@
+export const sources = [
+  { label: "ISO/IEC 13239 — HDLC (framing, bit stuffing)", href: "https://www.iso.org/standard/37010.html" },
+  { label: "RFC 1662 — PPP in HDLC-like Framing", href: "https://www.rfc-editor.org/rfc/rfc1662.html" },
+  { label: "Tanenbaum & Wetherall, Computer Networks — Data Link Layer (ARQ)", href: "https://www.pearson.com/" },
+  { label: "IEEE 802.11 — Wireless LAN (per-frame ACK / retransmission)", href: "https://standards.ieee.org/ieee/802.11/" },
+];
+
+## Framing: where does a frame begin and end?
+
+The [Physical layer](../../physical/) hands up an undifferentiated stream of bits. Before anything else,
+the [Data Link layer](../../data-link/) must mark **frame boundaries** so the receiver knows where one
+frame stops and the next starts. Three approaches:
+
+- **Length field** — prefix each frame with its byte count (Ethernet implicitly uses framing at the PHY
+  plus a length/type field). Simple, but a corrupted length desynchronizes everything after it.
+- **Byte (character) stuffing** — delimit frames with a special **flag** byte, and escape any flag that
+  appears in the payload with an escape byte (which is itself escaped). PPP does this.
+- **Bit stuffing** — HDLC marks frames with the flag `01111110` and, in the payload, **inserts a 0
+  after any run of five 1s**, so the flag pattern can never appear by accident. The receiver removes the
+  stuffed 0s. Transparent to any byte values, which is why HDLC framing underpins so many serial links.
+
+<Callout variant="insight" title="Modern wired Ethernet is unreliable on purpose">
+Classic Ethernet frames, detect corruption with the [CRC/FCS](../error-detection/), and **drop** bad
+frames — there is no link-layer retransmission. On a clean fiber/copper link with a ~10⁻¹² error rate,
+making the link reliable would cost latency and complexity for almost no benefit, so Ethernet leaves
+recovery to [TCP](../../transport/tcp/). ARQ lives where the medium is genuinely lossy: **Wi-Fi** (every
+802.11 unicast frame is individually ACKed and retransmitted), HDLC/PPP serial links, and long-haul
+radio. Knowing *who* retransmits — the link or the transport — is half of debugging throughput.
+</Callout>
+
+## ARQ: reliability through acknowledgment and retransmission
+
+**Automatic Repeat reQuest** makes a lossy link reliable: the receiver **acknowledges** frames it
+receives correctly, and the sender **retransmits** anything left unacknowledged before a timer expires.
+Three schemes trade simplicity against efficiency.
+
+### Stop-and-wait
+
+Send one frame, then wait for its ACK before sending the next. Correct and trivial — but the link sits
+**idle for a full round trip** between frames, so it wastes almost all the capacity of a fast or
+long-distance link.
+
+<SequenceDiagram
+  actors={["Sender", "Receiver"]}
+  steps={[
+    { from: 0, to: 1, label: "Frame 0" },
+    { from: 1, to: 0, label: "ACK 0", dashed: true },
+    { from: 0, to: 1, label: "Frame 1 (only now can it be sent)" },
+    { from: 1, to: 0, label: "ACK 1", dashed: true },
+  ]}
+  caption="One frame in flight at a time. On a high bandwidth-delay link the sender spends most of its time waiting, not transmitting."
+/>
+
+### Go-Back-N
+
+Allow a **window** of *N* unacknowledged frames in flight at once, filling the pipe. The receiver
+accepts frames **strictly in order** and sends **cumulative ACKs**. If a frame is lost, the receiver
+**discards everything after it**, and the sender **goes back** and resends the lost frame and all that
+followed.
+
+<SequenceDiagram
+  actors={["Sender", "Receiver"]}
+  steps={[
+    { from: 0, to: 1, label: "Frames 1, 2, 3, 4 sent back-to-back (window = 4)" },
+    { from: 1, to: 0, label: "Frame 2 lost → receiver discards 3, 4 (out of order); ACK 1 only", dashed: true },
+    { from: 0, to: 1, label: "Timeout → go back: retransmit 2, 3, 4" },
+    { from: 1, to: 0, label: "ACK 2, 3, 4 — back in order", dashed: true },
+  ]}
+  caption="Go-Back-N keeps the pipe full but a single loss forces retransmission of every frame after it — simple receiver (no buffering), wasteful on lossy links."
+/>
+
+### Selective Repeat
+
+The efficient sibling: the receiver **buffers** out-of-order frames and ACKs them individually, so the
+sender retransmits **only** the frames actually lost.
+
+<SequenceDiagram
+  actors={["Sender", "Receiver"]}
+  steps={[
+    { from: 0, to: 1, label: "Frames 1, 2, 3, 4 sent (window = 4)" },
+    { from: 1, to: 0, label: "Frame 2 lost; 3, 4 buffered → ACK 1, ACK 3, ACK 4", dashed: true },
+    { from: 0, to: 1, label: "Retransmit ONLY frame 2" },
+    { from: 1, to: 0, label: "ACK 2 → deliver 2, 3, 4 in order from the buffer", dashed: true },
+  ]}
+  caption="Selective Repeat retransmits just the lost frame, at the cost of buffering at the receiver and a tighter sequence-number rule (window ≤ half the sequence space)."
+/>
+
+<Callout variant="note" title="This is TCP's ancestor">
+TCP's [sliding window](../../transport/tcp/) is exactly this idea lifted to the end-to-end transport,
+and **SACK** makes it behave like Selective Repeat. The same trade-offs recur one layer up: window size
+sets throughput, and the choice between re-sending everything vs. only the gaps sets efficiency under
+loss.
+</Callout>
+
+<WorkedExample title="Why one frame at a time throttles a fast link">
+Let `a = propagation time ÷ transmission time`. Link utilization is:
+
+1. **Stop-and-wait:** `U = 1 / (1 + 2a)`. On a satellite link where propagation dwarfs transmission
+   (say `a = 10`), `U = 1/21 ≈ 4.8%` — the link is 95% idle.
+2. **Sliding window of N:** `U = min(1, N / (1 + 2a))`. To fill that same link you need
+   `N ≥ 1 + 2a = 21` frames in flight.
+3. This is the link-layer twin of TCP's bandwidth-delay product: the window must cover the round trip,
+   or throughput collapses regardless of raw link speed.
+</WorkedExample>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Throughput far below link rate on a long/lossy link** — too small a window (stop-and-wait behavior)
+  or Go-Back-N thrashing under loss; widen the window or switch to selective repeat.
+- **Wi-Fi slowdowns near the cell edge** — heavy 802.11 link-layer retransmission as the signal
+  degrades; the link is *hiding* loss from TCP, which is usually what you want.
+- **Desync after one bad frame** — a corrupted length field with length-based framing; flag/bit-stuffed
+  framing resynchronizes on the next flag.
+- **Duplicate delivery** — a lost ACK made the sender retransmit a frame the receiver already had;
+  sequence numbers let the receiver discard the duplicate.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why does modern switched Ethernet not use ARQ, while Wi-Fi does?",
+      options: [
+        "Ethernet is too fast for ARQ",
+        "Wired links have very low error rates, so Ethernet drops rare bad frames and lets TCP recover; Wi-Fi's lossy radio justifies per-frame link-layer ACK/retransmit",
+        "Wi-Fi has no CRC",
+      ],
+      answer: 1,
+      explanation: "On a clean wired link, link-layer reliability costs complexity and latency for almost no benefit, so Ethernet just detects and drops, leaving recovery to TCP. Wi-Fi's radio loses frames often enough that ACKing and retransmitting each one at the link layer pays off.",
+    },
+    {
+      q: "On a single lost frame, how do Go-Back-N and Selective Repeat differ?",
+      options: [
+        "Go-Back-N resends only the lost frame; Selective Repeat resends everything after it",
+        "Go-Back-N resends the lost frame and all that followed; Selective Repeat buffers the later frames and resends only the lost one",
+        "They behave identically",
+      ],
+      answer: 1,
+      explanation: "Go-Back-N's receiver discards out-of-order frames, so the sender must resend the lost frame and everything after it. Selective Repeat buffers the later frames and retransmits only the actual gap — more efficient, but it needs receiver buffering.",
+    },
+    {
+      q: "How does HDLC's bit stuffing keep the flag pattern 01111110 from appearing in the payload?",
+      options: [
+        "It encrypts the payload",
+        "It inserts a 0 after any run of five consecutive 1s, so six 1s can never occur in the data; the receiver removes the stuffed 0s",
+        "It forbids the byte 0x7E in data",
+      ],
+      answer: 1,
+      explanation: "After five 1s in the payload the sender stuffs a 0, so the six-1s flag pattern can never appear by accident. The receiver strips those 0s, making the framing transparent to any bit pattern.",
+    },
+  ]}
+/>

@@ -1,0 +1,161 @@
+export const sources = [
+  { label: "IEEE 802.1D-2004 — MAC Bridges (Spanning Tree, incorporating RSTP/802.1w)", href: "https://standards.ieee.org/ieee/802.1D/3677/" },
+  { label: "IEEE 802.1Q — Bridges and Bridged Networks (MSTP/802.1s)", href: "https://standards.ieee.org/ieee/802.1Q/" },
+  { label: "Radia Perlman, 'An Algorithm for Distributed Computation of a Spanning Tree' (1985)", href: "https://dl.acm.org/doi/10.1145/319056.319004" },
+];
+
+## Why a Layer-2 loop is a catastrophe
+
+Redundant links between switches are good for resilience and terrible for raw Ethernet, because the
+[Data Link layer](../../data-link/) frame header has **no TTL**. A network-layer packet caught in a loop
+dies when its TTL hits zero; an Ethernet frame caught in a switching loop circulates **forever**. Worse,
+switches *flood* broadcasts and unknown-unicast frames out every port — so a single loop multiplies one
+broadcast into an exponential **broadcast storm** that saturates every link, while the same frame
+arriving on different ports makes the **MAC address table thrash**. Within seconds the LAN melts.
+
+<Callout variant="insight" title="STP's job in one sentence">
+Given a physical topology with loops, the **Spanning Tree Protocol** computes a **loop-free logical
+tree** that still reaches every switch — by selecting one path and putting the redundant links into a
+**blocking** state, ready to take over if the active path fails. Radia Perlman's 1985 algorithm turned
+a meshed, loop-prone fabric into something Ethernet could safely flood across.
+</Callout>
+
+## How STP builds the tree
+
+Switches exchange **BPDUs** (Bridge Protocol Data Units) and run a distributed computation in three
+moves:
+
+1. **Elect a root bridge.** Every switch has a **Bridge ID** = *priority* (default 32768) + its MAC
+   address. The **lowest Bridge ID wins** — so to steer the root deliberately, you lower a switch's
+   priority. All ports on the root become **designated** (forwarding).
+2. **Each non-root switch picks a root port.** Its single best (lowest **root path cost**) port toward
+   the root. Cost accumulates per link by speed (10 Gb = 2, 1 Gb = 4, 100 Mb = 19, 10 Mb = 100). Ties
+   break on the lowest **sender Bridge ID**, then lowest **sender Port ID**.
+3. **Each segment picks a designated port.** The one port on each link with the lowest cost to root
+   forwards for that segment; every remaining port goes **blocking**, breaking the loop.
+
+That second step — each switch finding its lowest-cost path to the elected root — is a shortest-path
+tree rooted at the root bridge. Step through it:
+
+<SpanningTreeViz
+  nodes={[
+    { id: "S1", x: 320, y: 60, label: "S1" },
+    { id: "S2", x: 140, y: 190, label: "S2" },
+    { id: "S3", x: 500, y: 190, label: "S3" },
+    { id: "S4", x: 320, y: 310, label: "S4" },
+  ]}
+  edges={[
+    { a: "S1", b: "S2", cost: 4 },
+    { a: "S1", b: "S3", cost: 4 },
+    { a: "S2", b: "S4", cost: 4 },
+    { a: "S3", b: "S4", cost: 4 },
+    { a: "S2", b: "S3", cost: 19 },
+  ]}
+  bridgeIds={{
+    S1: "4096.0000.0000.0001",
+    S2: "32768.0000.0000.0002",
+    S3: "32768.0000.0000.0003",
+    S4: "32768.0000.0000.0004",
+  }}
+  caption="S1 has the lowest Bridge ID, so it becomes root. S4 reaches the root at cost 8 via S2 or S3 — the tie breaks to S2 (lower Bridge ID). The S3–S4 and S2–S3 links are left blocking, breaking every loop while staying ready as backups."
+/>
+
+## Port roles and states (802.1D)
+
+Classic STP moves a port through **states** before it forwards — deliberately slow, to be sure no loop
+forms while the tree settles:
+
+| State | Forwards data? | Learns MACs? | Purpose |
+| --- | --- | --- | --- |
+| **Blocking** | no | no | Receives BPDUs only; the loop-breaking state |
+| **Listening** | no | no | Participating in election, not yet learning |
+| **Learning** | no | yes | Building the MAC table before forwarding |
+| **Forwarding** | yes | yes | Normal operation |
+| **Disabled** | no | no | Administratively down |
+
+<Callout variant="warning" title="Classic STP is slow — by ~30–50 seconds">
+802.1D uses timers: **Hello 2 s**, **Max Age 20 s**, **Forward Delay 15 s** (applied twice, for
+Listening then Learning). After a topology change a port can take **30–50 seconds** to begin forwarding.
+That's an eternity for modern networks — which is exactly why **RSTP** replaced it.
+</Callout>
+
+## RSTP (802.1w): convergence in milliseconds
+
+Rapid STP keeps the same root-election math but converges in **well under a second** by replacing timers
+with an active **handshake**. It adds explicit backup roles:
+
+- **Root port** / **Designated port** — as before (forwarding).
+- **Alternate port** — a backup *path to the root* (a blocked port that heard a better BPDU from
+  another switch); it can take over the root port's job nearly instantly.
+- **Backup port** — a backup for a *designated port* on the same shared segment.
+
+Instead of waiting out Forward Delay, two switches use a **proposal/agreement** exchange to safely and
+immediately transition a link to forwarding. **Edge ports** (host-facing, configured with PortFast) skip
+the wait entirely — there's no switch behind them to loop with.
+
+<Callout variant="note" title="MSTP and PVST+ — one tree isn't enough">
+A single spanning tree wastes every blocked link. **PVST+** (Cisco) runs an instance **per VLAN**, so
+different VLANs can block different links and use the redundant capacity. **MSTP** (802.1s) maps many
+VLANs onto a few spanning-tree **instances** for the same benefit without the per-VLAN overhead.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Broadcast storm / 100% link utilization, LAN unusable** — a loop with STP disabled, failed, or
+  filtered. The defining L2 emergency; find and block the loop.
+- **MAC address flapping** (same MAC on two ports) — a loop or, post-STP, an unidirectional link where
+  one direction fails so BPDUs stop being heard. **Loop Guard / UDLD** defend against this.
+- **Suboptimal traffic paths** — the root bridge landed on a poorly-placed switch (default priorities,
+  so lowest MAC won). Set the core switch's priority low to make it root deliberately.
+- **A host port takes 30 s to come up** — classic STP Listening/Learning delay on an access port; enable
+  PortFast (edge port) so host ports forward immediately.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="The root bridge is a position of trust">
+- **STP root takeover** — an attacker plugs in a switch advertising a superior (low) Bridge ID, becomes
+  root, and pulls traffic through itself for sniffing or DoS. **Root Guard** on ports facing
+  non-core switches rejects superior BPDUs.
+- **BPDU spoofing on access ports** — **BPDU Guard** error-disables any access port that receives a
+  BPDU (a host should never send one), stopping rogue switches and accidental loops.
+- **BPDU filtering** must be used carefully — wrongly applied it *hides* a loop instead of preventing it.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why is an Ethernet switching loop so much more dangerous than an IP routing loop?",
+      options: [
+        "Ethernet frames are larger",
+        "The Ethernet frame header has no TTL, so a looped frame circulates forever and broadcasts multiply into a storm",
+        "Switches are slower than routers",
+      ],
+      answer: 1,
+      explanation: "An IP packet's TTL eventually hits zero and the packet is dropped. Ethernet frames have no such field, so a looped frame never dies, and flooded broadcasts multiply exponentially — a broadcast storm that saturates the LAN.",
+    },
+    {
+      q: "How is the root bridge chosen?",
+      options: [
+        "The switch with the most ports",
+        "The switch with the lowest Bridge ID (priority + MAC)",
+        "The first switch powered on",
+      ],
+      answer: 1,
+      explanation: "Every switch advertises its Bridge ID (priority then MAC address); the lowest wins. Operators steer the election by lowering a chosen core switch's priority so it becomes — and stays — root.",
+    },
+    {
+      q: "What is RSTP's main improvement over classic 802.1D?",
+      options: [
+        "It supports more VLANs",
+        "It converges in milliseconds using a proposal/agreement handshake and backup roles instead of 30–50 s of timers",
+        "It encrypts BPDUs",
+      ],
+      answer: 1,
+      explanation: "RSTP keeps the same election but replaces the Listening/Learning timer wait with an active proposal/agreement handshake and explicit alternate/backup roles, cutting convergence from tens of seconds to sub-second.",
+    },
+  ]}
+/>

@@ -20,6 +20,9 @@ export function LayerNav() {
         {LAYERS_TOP_DOWN.map((l) => {
           const href = `/layers/${l.slug}/`;
           const active = pathname === href || pathname === href.slice(0, -1);
+          // Expand a layer's sub-topics when the layer or any of its topics is active.
+          const onLayer = pathname.startsWith(href) || pathname === href.slice(0, -1);
+          const topics = l.topics ?? [];
           return (
             <li key={l.slug}>
               <Link
@@ -36,6 +39,33 @@ export function LayerNav() {
                 </span>
                 <span className={active ? "font-semibold" : undefined}>{l.name}</span>
               </Link>
+              {onLayer && topics.length > 0 ? (
+                <ul
+                  className="mt-1 ml-5 space-y-0.5 border-l pl-3"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  {topics.map((t) => {
+                    const tHref = `/layers/${l.slug}/${t.slug}/`;
+                    const tActive = pathname === tHref || pathname === tHref.slice(0, -1);
+                    return (
+                      <li key={t.slug}>
+                        <Link
+                          href={tHref}
+                          aria-current={tActive ? "page" : undefined}
+                          className="block rounded-md px-2 py-1 text-[13px] transition-colors hover:bg-[var(--bg-soft)]"
+                          style={
+                            tActive
+                              ? { backgroundColor: "var(--bg-soft)", fontWeight: 600 }
+                              : { color: "var(--fg-muted)" }
+                          }
+                        >
+                          {t.title}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
             </li>
           );
         })}

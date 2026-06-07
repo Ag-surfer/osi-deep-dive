@@ -1,0 +1,106 @@
+export const sources = [
+  { label: "TIA-568 — Commercial Building Telecommunications Cabling (Cat5e/6/6A)", href: "https://tiaonline.org/" },
+  { label: "ITU-T G.652 / G.694 — Single-mode fibre & DWDM grids", href: "https://www.itu.int/rec/T-REC-G.652" },
+  { label: "ITU-T G.707 / SONET-SDH — TDM transport", href: "https://www.itu.int/rec/T-REC-G.707" },
+  { label: "IEEE 802.3 — Ethernet physical media (copper & fibre PMDs)", href: "https://standards.ieee.org/ieee/802.3/" },
+];
+
+## The medium and its impairments
+
+Every signal fights the same four enemies as it crosses a medium, and each medium trades them
+differently:
+
+- **Attenuation** — the signal weakens with distance, setting the maximum reach before a repeater.
+- **Noise** — thermal, electromagnetic, crosstalk from neighbors; it sets the SNR and thus the
+  [Shannon capacity](../modulation-capacity/).
+- **Distortion / dispersion** — different frequencies travel at slightly different speeds, smearing
+  symbols into each other (inter-symbol interference) and capping the bit rate over distance.
+- **Crosstalk** — coupling between adjacent conductors (the reason twisted pair is *twisted*).
+
+## The three media
+
+| Medium | Reach / typical | Strengths | Weaknesses |
+| --- | --- | --- | --- |
+| **Twisted pair** (Cat5e/6/6A/8) | ~100 m | Cheap, ubiquitous, PoE | Attenuation & crosstalk limit distance; EMI-prone |
+| **Coaxial** | Longer than UTP | Good shielding, broadband (DOCSIS) | Bulky; largely legacy for LANs |
+| **Optical fibre** | Up to ~80 km+ unamplified | Enormous bandwidth, no EMI, low loss (~0.2 dB/km) | Cost, fragility, fusion-splicing skill |
+| **Wireless** | Varies hugely | No cabling, mobility | Shared/contended spectrum, fading, interference |
+
+<Callout variant="insight" title="Single-mode vs. multi-mode fibre">
+**Multi-mode fibre (MMF)** has a wide core, so light takes many paths ("modes") that arrive at slightly
+different times — **modal dispersion** limits it to short reach (data-center rows, driven by cheap
+VCSELs). **Single-mode fibre (SMF)** has a core so narrow that light takes essentially one path,
+eliminating modal dispersion — so with a precise laser at 1310/1550 nm it carries enormous bandwidth for
+tens of kilometers. Long-haul and metro are SMF; inside-the-rack is often MMF. The remaining limit on
+SMF is **chromatic dispersion**, managed with dispersion-compensating fibre and coherent optics.
+</Callout>
+
+## Multiplexing: sharing one medium
+
+A single fibre or cable can carry many independent conversations at once. Three ways to slice it:
+
+- **TDM (Time-Division)** — give each stream a recurring **time slot**. The basis of the
+  telephone/transport hierarchy (T1/E1, **SONET/SDH**). **Statistical TDM** hands idle slots to whoever
+  has data, the packet-switching idea that underlies Ethernet and the internet.
+- **FDM (Frequency-Division)** — give each stream its own **frequency band** on the same medium
+  simultaneously. Analog radio and legacy cable TV; OFDM is FDM taken to many tiny orthogonal carriers.
+- **WDM (Wavelength-Division)** — FDM for light: send many **wavelengths (colors)** down one fibre at
+  once, each a fully independent channel.
+
+<Callout variant="insight" title="DWDM: terabits down a single glass strand">
+**Dense WDM** packs 80+ wavelengths onto one fibre on a precise ITU grid (e.g. 50 GHz spacing around
+1550 nm), each carrying 100–800 Gb/s with coherent optics — **multiple terabits per second on a single
+strand**, amplified all-optically by EDFAs every ~80 km without converting back to electronics. This is
+the physical foundation of the internet backbone and submarine cables: when traffic grows, operators
+"light up" more wavelengths on fibre that's already in the ground. **CWDM** is the cheaper, coarse-grid
+cousin for shorter metro/access links.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in the medium">
+- **Errors that worsen with cable length** — attenuation or dispersion exceeding the medium's budget;
+  shorten the run, add a repeater, or move to fibre.
+- **Intermittent copper errors near motors / fluorescent lights** — EMI coupling into unshielded pairs;
+  use shielded cable or fibre, which is immune.
+- **A fibre link that won't come up or has high loss** — a dirty or damaged connector end-face
+  (the #1 fibre fault), a bad splice, or exceeding the optical power budget. Inspect and clean before
+  anything else.
+- **MMF link fails at a distance where SMF would work** — modal dispersion; the reach simply exceeds
+  multi-mode's limit for that rate.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why does single-mode fibre reach far longer distances than multi-mode?",
+      options: [
+        "It uses a brighter light source",
+        "Its narrow core confines light to essentially one path, eliminating the modal dispersion that smears symbols in multi-mode",
+        "It has no attenuation",
+      ],
+      answer: 1,
+      explanation: "Multi-mode's wide core lets light take many paths that arrive at different times (modal dispersion), limiting reach. Single-mode's narrow core allows essentially one path, so with a precise laser it carries high bandwidth for tens of kilometers.",
+    },
+    {
+      q: "What does DWDM multiplex onto a single fibre?",
+      options: [
+        "Time slots", "Many distinct wavelengths (colors) of light, each an independent channel", "Voltage levels",
+      ],
+      answer: 1,
+      explanation: "Dense Wavelength-Division Multiplexing sends dozens of wavelengths down one fibre at once, each carrying an independent high-speed channel — reaching multiple terabits per second per strand, the backbone of long-haul and submarine links.",
+    },
+    {
+      q: "How does statistical TDM differ from classic (synchronous) TDM?",
+      options: [
+        "It uses frequency bands instead of time slots",
+        "It allocates time slots on demand to whoever has data, instead of reserving a fixed slot per stream",
+        "It only works on fibre",
+      ],
+      answer: 1,
+      explanation: "Classic TDM reserves a fixed recurring slot for each stream even when idle. Statistical TDM hands slots to whichever streams actually have data to send, using the medium far more efficiently — the principle behind packet switching.",
+    },
+  ]}
+/>
