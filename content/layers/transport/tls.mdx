@@ -26,8 +26,9 @@ TLS channel on port 443.
 Once the handshake completes, everything is carried in **records**: application data is fragmented,
 each fragment sealed with **AEAD** (Authenticated Encryption with Associated Data — e.g. AES-GCM or
 ChaCha20-Poly1305) under keys derived in the handshake, and tagged so tampering is detected on receipt.
-AEAD fuses encryption and integrity into one operation, which is why TLS 1.3 removed the old
-encrypt-then-MAC cipher constructions that caused a decade of padding-oracle bugs.
+AEAD fuses encryption and integrity into one operation, which is why TLS 1.3 removed the old CBC-mode
+**MAC-then-encrypt** cipher constructions that caused a decade of padding-oracle bugs (POODLE, Lucky13).
+(Encrypt-then-MAC was a *mitigation* for those; AEAD makes the whole question moot.)
 
 ## The handshake
 

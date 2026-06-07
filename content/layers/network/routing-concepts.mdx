@@ -74,9 +74,12 @@ Distance-vector protocols bolt on a stack of anti-loop hacks to survive this:
 A link-state router describes **only its own directly connected links** in a Link-State Advertisement
 (LSA / LSP) and **floods** it reliably to every router in the area. Once every router holds the same
 **Link-State Database (LSDB)**, each independently runs **Dijkstra's SPF** to build a shortest-path
-tree rooted at itself. No rumor — everyone computes from the same map, so transient loops are rare and
-convergence is fast. The cost is CPU (running SPF), memory (storing the whole LSDB), and flooding
-overhead — which is exactly why link-state protocols introduce **areas** to bound the blast radius.
+tree rooted at itself. No rumor — everyone computes from the same map, so the *persistent* loops and
+count-to-infinity of distance-vector don't occur and convergence is fast. (Brief **transient
+micro-loops** can still form while routers update their FIBs at slightly different times — a routine,
+well-studied effect that loop-free-alternate and ordered-FIB techniques mitigate.) The cost is CPU
+(running SPF), memory (storing the whole LSDB), and flooding overhead — which is exactly why link-state
+protocols introduce **areas** to bound the blast radius.
 
 <Callout variant="note" title="Why link-state needs areas, and distance-vector doesn't">
 SPF is `O(E log V)` and the LSDB grows with the area. Double the routers and every router does more

@@ -59,7 +59,7 @@ incrementally (only changes thereafter), kept alive by KEEPALIVEs within the neg
     { from: 0, to: 1, label: "UPDATE: NLRI (prefixes) + path attributes" },
     { from: 1, to: 0, label: "UPDATE / periodic KEEPALIVE (within hold time)", dashed: true },
   ]}
-  caption="Idle → Connect → Active → OpenSent → OpenConfirm → Established. A session stuck in Active almost always means the underlying TCP 179 connection can't form (ACL, no route to peer, wrong address)."
+  caption="Success path: Idle → Connect → OpenSent → OpenConfirm → Established. Active is the alternate/retry state the FSM falls back to when the TCP connection fails — which is exactly why a session stuck in Active means TCP 179 can't establish (ACL, no route to peer, wrong address)."
 />
 
 BGP uses four message types: **OPEN** (negotiate ASN/hold-time/capabilities), **UPDATE** (advertise NLRI
@@ -187,8 +187,10 @@ BGP is **deliberately slow** — global stability outranks fast reaction. Key me
   filters and the **"down-only"** community signaling (RFC 9234 roles).
 - **AS_PATH manipulation** — forging a shorter path; **BGPsec** signs the path, but deployment is thin —
   origin validation (RPKI) is the realistic defense today.
-- **Session attacks** — protect TCP 179 with **TCP-AO/MD5**, **GTSM/TTL-security** (eBGP is TTL 1, so
-  reject anything farther), and **`maximum-prefix`** limits so a misbehaving peer can't flood your RIB.
+- **Session attacks** — protect TCP 179 with **TCP-AO/MD5**, **GTSM/TTL-security** (RFC 5082: the peer
+  sends with TTL 255 and you reject any BGP packet arriving with TTL < 254, so a multi-hop attacker —
+  whose packets were decremented in transit — is dropped), and **`maximum-prefix`** limits so a
+  misbehaving peer can't flood your RIB.
 </Callout>
 
 ## Failure modes & troubleshooting

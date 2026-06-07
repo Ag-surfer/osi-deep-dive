@@ -61,9 +61,12 @@ A telephone channel offers roughly **B = 3,100 Hz** of usable bandwidth at an SN
 3. So **~31 kbps is the hard ceiling** of an analog phone line — which is exactly why V.34 modems
    maxed out at 33.6 kbps. (56k modems only beat it by being *digital* at the ISP end, removing one
    analog-to-digital conversion and its quantization noise — changing the channel, not the math.)
-4. Nyquist agrees on the symbol side: at 2 levels the max is `2 × 3100 = 6,200` baud, so reaching
-   31 kbps needs `≈ 5` bits/symbol (~32-point constellation) — and Shannon's SNR limit is precisely
-   what makes 32 points the practical ceiling, not 1024.
+4. On the symbol side: the phone channel is **passband** (~300–3,400 Hz), and a carrier-modulated
+   passband channel of bandwidth *B* carries about *B* symbols/s (QAM packs two dimensions, I and Q, per
+   symbol) — so V.34 actually ran at a **3,429-baud** symbol rate. Reaching ~33.6 kbps over it therefore
+   needs ≈ **10 bits/symbol**, which V.34 delivered with a large **trellis-coded QAM constellation
+   (~1,664 points)**. Shannon's `B·log₂(1+SNR)` caps the *bit rate* (~31–34 kbps); the constellation
+   size plus coding is how the modem chased that ceiling.
 </WorkedExample>
 
 <Callout variant="note" title="The whole game in one sentence">

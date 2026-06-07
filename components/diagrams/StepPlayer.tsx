@@ -18,6 +18,7 @@ export function StepPlayer({
   stepCount,
   renderStep,
   narration,
+  controls,
   intervalMs = 1600,
 }: {
   title?: string;
@@ -29,6 +30,8 @@ export function StepPlayer({
   renderStep: (index: number) => ReactNode;
   /** The narration shown in the aria-live status line for a step. */
   narration: (index: number) => ReactNode;
+  /** Optional interactive inputs rendered under the title (e.g. an editable field). */
+  controls?: ReactNode;
   intervalMs?: number;
 }) {
   const [i, setI] = useState(0);
@@ -88,6 +91,12 @@ export function StepPlayer({
           >
             {title}
           </p>
+        ) : null}
+
+        {controls ? (
+          <div className="border-b px-4 py-3" style={{ borderColor: "var(--border)" }}>
+            {controls}
+          </div>
         ) : null}
 
         {renderStep(cur)}

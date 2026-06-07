@@ -31,9 +31,11 @@ note how Manchester refuses to sit still even through a run of identical bits, w
 
 - **NRZ-L** — level *is* the bit. Maximally efficient (signal rate = bit rate) but no clocking and no DC
   balance; unusable alone for long runs.
-- **NRZI** — a **1 causes a transition**, a 0 holds. Transitions now depend on data, not absolute level
-  (robust to polarity inversion). Used by **USB** (with bit stuffing — insert a forced transition after
-  six 1s — to guarantee clocking).
+- **NRZI** — a **transition** encodes one bit value, holding the level encodes the other, so timing
+  depends on data, not absolute level (robust to polarity inversion). The waveform above uses the
+  **NRZI-mark** convention (a *1* transitions, a 0 holds). **USB** uses the opposite **NRZI-space**
+  convention (a *0* transitions, a 1 holds) — which is exactly why USB **bit-stuffs a 0 after six
+  consecutive 1s**: a long run of 1s would otherwise produce no transitions and starve the clock.
 - **Manchester** — a transition in the **middle of every bit** (used by 10 Mb Ethernet). Perfectly
   self-clocking and DC-balanced, but it doubles the signaling rate: a 10 Mb/s link signals at 20
   Mbaud. That bandwidth cost is why it didn't scale past 10 Mb.
@@ -50,7 +52,7 @@ slightly larger symbols chosen to guarantee transitions and DC balance — far c
 | **4B/5B** | 4 data bits → 5-bit symbol | 25% | 100BASE-TX (Fast Ethernet), FDDI |
 | **8B/10B** | 8 data bits → 10-bit symbol | 25% | 1G Ethernet, PCIe gen1–2, Fibre Channel, SATA |
 | **64B/66B** | 64 data bits → 66-bit frame | ~3% | 10G Ethernet and up (with a scrambler) |
-| **128B/130B** | 128 bits → 130 | ~1.5% | PCIe gen3+ |
+| **128B/130B** | 128 bits → 130 | ~1.5% | PCIe gen3–5 (gen6 switched to PAM4 + FLIT) |
 
 <Callout variant="note" title="The shift from coding to scrambling">
 4B/5B and 8B/10B use a **lookup table** of hand-picked symbols that always contain transitions and stay

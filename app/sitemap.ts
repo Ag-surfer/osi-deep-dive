@@ -10,6 +10,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/journey/",
     "/glossary/",
     "/quiz/",
+    "/methodology/",
     ...LAYERS.map((l) => `/layers/${l.slug}/`),
     ...ALL_TOPICS.map(({ layer, topic }) => `/layers/${layer.slug}/${topic.slug}/`),
   ];

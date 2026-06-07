@@ -83,7 +83,7 @@ that much unacknowledged data in flight (a **sliding window**). Two refinements 
 
 <Callout variant="warning" title="Nagle vs. delayed-ACK: the 40 ms stall">
 **Nagle's algorithm** (<RFCRef n={896} />) withholds a small segment until prior data is ACKed, coalescing
-tiny writes to fight "silly window syndrome." **Delayed ACK** withholds an ACK briefly (~40–200 ms),
+tiny writes to fight the **small-packet (tinygram) problem**. **Delayed ACK** withholds an ACK briefly (~40–200 ms),
 hoping to piggyback it on a reply. Together they can **deadlock**: the sender waits for an ACK before
 sending its small segment, while the receiver delays that ACK waiting for data — a classic latency
 spike in request/response protocols. Interactive apps set **`TCP_NODELAY`** to disable Nagle.

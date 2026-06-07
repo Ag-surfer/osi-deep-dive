@@ -73,8 +73,9 @@ on-path observers from linking your traffic across paths.
 
 ## Loss recovery and congestion control
 
-QUIC keeps TCP's congestion-control ideas (it ships CUBIC/BBR-style controllers, <RFCRef n={9002} />)
-but fixes a long-standing TCP measurement flaw:
+QUIC keeps TCP's congestion-control ideas — <RFCRef n={9002} /> specifies a NewReno-baseline controller
+as its example but lets implementations plug in any controller, and real stacks commonly ship CUBIC or
+BBR — but fixes a long-standing TCP measurement flaw:
 
 <Callout variant="insight" title="Monotonic packet numbers kill retransmission ambiguity">
 TCP reuses a segment's sequence number when it retransmits, so an ACK can't reveal whether it matched

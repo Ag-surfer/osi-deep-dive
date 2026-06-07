@@ -80,6 +80,7 @@ export function LayerNav() {
         {[
           { href: "/journey/", label: "Packet Journey" },
           { href: "/glossary/", label: "Glossary & RFCs" },
+          { href: "/methodology/", label: "Accuracy & Methodology" },
         ].map((m) => {
           const active = pathname === m.href || pathname === m.href.slice(0, -1);
           return (

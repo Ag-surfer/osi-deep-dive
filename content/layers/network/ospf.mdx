@@ -36,7 +36,8 @@ the single most common "why won't OSPF come up?" cause:
 <Callout variant="warning" title="Must match to form an adjacency">
 - **Area ID** — interfaces must be in the same area.
 - **Hello and Dead intervals** — must be identical.
-- **Subnet / mask** — neighbors must share the IP subnet (OSPFv2).
+- **Subnet / mask** — on **broadcast/NBMA** segments the interfaces must be in the same IP subnet (same
+  mask); OSPFv2 ignores the mask on point-to-point and virtual links.
 - **Authentication** — type and key must match.
 - **Stub/area flags** (E-bit, N-bit) — a stub router won't peer with a non-stub.
 - **MTU** — must match, or the adjacency hangs in **EXSTART** (see troubleshooting).

@@ -25,9 +25,11 @@ possibly on a different language, CPU, and endianness. The format chosen trades 
 <Callout variant="insight" title="TLV: the shape of almost every binary format">
 Most binary encodings are some form of **Type–Length–Value**: a tag saying *what* a field is, a length,
 then the bytes. TLV is **self-delimiting** (you can skip a field you don't understand by jumping its
-length) and **extensible** (new fields don't break old parsers). ASN.1's **BER/DER**, Protocol Buffers'
-tag-wiretype prefix, and countless network protocols are all TLV underneath — learn the pattern once and
-binary formats stop being opaque.
+length) and **extensible** (new fields don't break old parsers). ASN.1's **BER/DER** and countless
+network protocols are TLV underneath. **Protocol Buffers** is a close relative — a *tag + wire-type* key
+tells the decoder how to find the value's end (a varint's terminator bit, a fixed 4/8 bytes, or — only
+for length-delimited fields — an explicit length), so it's not strictly TLV but the same skip-what-you-
+don't-know idea. Learn the pattern once and binary formats stop being opaque.
 </Callout>
 
 ## Schemas, tags, and varints

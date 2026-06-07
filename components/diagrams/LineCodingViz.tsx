@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import { SKETCH } from "./RoughFigure";
 import { StepPlayer } from "./StepPlayer";
 import { ENCODINGS, encode, type Encoding } from "@/lib/algorithms/lineCoding";
@@ -168,9 +168,9 @@ function Waveforms({
  * its self-clocking property visible against NRZ's long flat runs.
  */
 export function LineCodingViz({
-  bits,
+  bits: initialBits,
   encodings = ENCODINGS,
-  title = "Line coding — how bits become signals on the wire",
+  title = "Line coding — type a bit pattern and compare the schemes",
   caption,
 }: {
   bits: string;
@@ -178,6 +178,10 @@ export function LineCodingViz({
   title?: string;
   caption?: string;
 }) {
+  const inputId = useId();
+  const [text, setText] = useState(initialBits);
+  const bits = text.length > 0 ? text : "0"; // always a valid (non-empty) pattern to encode
+
   const series = useMemo(() => {
     const s: Record<string, number[]> = {};
     for (const e of encodings) s[e] = encode(bits, e);
@@ -207,7 +211,32 @@ export function LineCodingViz({
       summary={summary}
       caption={
         caption ??
-        "Step one bit at a time. Notice Manchester and Differential Manchester guarantee a transition every bit (a recoverable clock), while NRZ-L can sit flat through a long run of identical bits."
+        "Edit the bit pattern, then step one bit at a time. Notice Manchester and Differential Manchester guarantee a transition every bit (a recoverable clock), while NRZ-L can sit flat through a long run of identical bits."
+      }
+      controls={
+        <label htmlFor={inputId} className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="shrink-0" style={{ color: "var(--fg-muted)" }}>
+            Bit pattern
+          </span>
+          <input
+            id={inputId}
+            value={text}
+            spellCheck={false}
+            autoComplete="off"
+            inputMode="numeric"
+            onChange={(e) => setText(e.target.value.replace(/[^01]/g, "").slice(0, 12))}
+            className="w-40 rounded-md border px-3 py-1.5 font-mono text-sm tracking-widest"
+            style={{
+              borderColor: "var(--border)",
+              backgroundColor: "var(--bg)",
+              color: "var(--fg)",
+            }}
+            placeholder="0111110"
+          />
+          <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+            0s and 1s, up to 12 bits
+          </span>
+        </label>
       }
       stepCount={bits.length}
       narration={narrate}

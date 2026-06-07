@@ -19,7 +19,9 @@ for 30 years even as the wire format underneath was reinvented twice.
   (replace, idempotent), **PATCH** (partial update), **DELETE**, **HEAD** (headers only). Safe and
   idempotent semantics are what let proxies cache and clients retry.
 - **Status codes** classify the result: **2xx** success, **3xx** redirection, **4xx** client error
-  (400, 401, 403, **404**), **5xx** server error (500, **503**). The first digit is the whole story.
+  (400, 401, 403, **404**), **5xx** server error (500, **503**). The first digit gives the class, but the
+  specific code matters — 301 vs 302 vs 308 change whether and how a client follows a redirect, and 304
+  says "use your cache."
 - **Headers** carry metadata: content type and length, caching directives, authentication,
   compression ([`Content-Encoding: gzip/br`](../../presentation/compression/)), and more.
 

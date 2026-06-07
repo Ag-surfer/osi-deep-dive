@@ -37,7 +37,7 @@ Step through the division on a small example:
 <Callout variant="note" title="Why CRC is strong against burst errors">
 A well-chosen generator polynomial of degree *r* guarantees detection of: **all single-bit errors**,
 **all double-bit errors**, **any odd number of bit errors** (if the polynomial has the factor `x+1`),
-and **every burst error shorter than *r* bits**. CRC-32's 32-bit remainder makes the odds that a random
+and **every burst error of length *r* bits or shorter**. CRC-32's 32-bit remainder makes the odds that a random
 corruption happens to produce a zero remainder about **1 in 4 billion**. That combination — burst
 robustness plus a vanishingly small miss rate, in pure shift-and-XOR hardware — is why CRC won.
 </Callout>
@@ -103,7 +103,7 @@ Never treat a checksum or CRC as a security control; it only guards against nois
         "It can correct errors, not just detect them",
       ],
       answer: 1,
-      explanation: "A CRC with a good generator detects all bursts shorter than its width and all odd-bit errors, missing random corruption only ~1 in 4 billion — and it's pure shift/XOR hardware. The Internet checksum is cheaper in software but much weaker, so it's used only as a higher-layer backstop.",
+      explanation: "A CRC with a good generator detects all bursts up to its width (e.g. 32 bits for CRC-32) and all odd-bit errors, missing random corruption only ~1 in 4 billion — and it's pure shift/XOR hardware. The Internet checksum is cheaper in software but much weaker, so it's used only as a higher-layer backstop.",
     },
     {
       q: "Can a CRC protect a frame against a malicious attacker modifying it?",

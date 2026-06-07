@@ -14,7 +14,7 @@ collective senders from overrunning the *network* — the routers and links betw
 is on the [Transport layer overview](../../transport/); here we go deep on the network half.
 
 In **October 1986** the early internet suffered **congestion collapse**: a link between LBL and UC
-Berkeley dropped from 32 kbit/s to **40 bit/s** — a 1000× collapse. Senders retransmitted lost packets,
+Berkeley dropped from 32 kbit/s to **40 bit/s** — an ~800× collapse. Senders retransmitted lost packets,
 which added more load, which caused more loss, in a ruinous feedback loop. Van Jacobson's response —
 slow start and congestion avoidance — is the reason the internet still works at scale. TCP infers
 congestion from the network's only honest signal (**loss**, and later **delay** and **ECN marks**) and
@@ -86,8 +86,9 @@ bufferbloat problem from the router side.
 ## ECN: congestion without dropping
 
 **Explicit Congestion Notification** lets a router signal congestion by **marking** a bit in the IP
-header instead of dropping the packet. The receiver echoes the mark back to the sender (TCP's
-ECE/CWR flags), which reduces cwnd as if it had seen a loss — but *no data was lost*, so there's no
+header instead of dropping the packet. The receiver echoes the CE mark back to the sender with the
+**ECE** flag; the sender reduces cwnd as if it had seen a loss and sets **CWR** on its next segment to
+signal it responded (only ECE travels receiver→sender) — but *no data was lost*, so there's no
 retransmission and no latency spike. ECN needs support at both endpoints and the routers in between;
 where deployed (notably data centers, and increasingly the public internet via L4S), it removes loss
 as the price of congestion feedback.

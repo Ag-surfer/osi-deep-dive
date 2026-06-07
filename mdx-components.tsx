@@ -22,6 +22,8 @@ import { EyeDiagramViz } from "@/components/diagrams/EyeDiagramViz";
 import { HuffmanViz } from "@/components/diagrams/HuffmanViz";
 import { DnsResolutionViz } from "@/components/diagrams/DnsResolutionViz";
 import { KerberosViz } from "@/components/diagrams/KerberosViz";
+import { SubnetCalculator } from "@/components/diagrams/SubnetCalculator";
+import { EncapsulationExplorer } from "@/components/diagrams/EncapsulationExplorer";
 import { SignalWire } from "@/components/diagrams/anim/SignalWire";
 import { PacketRouting } from "@/components/diagrams/anim/PacketRouting";
 import { SlidingWindow } from "@/components/diagrams/anim/SlidingWindow";
@@ -59,6 +61,8 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     HuffmanViz,
     DnsResolutionViz,
     KerberosViz,
+    SubnetCalculator,
+    EncapsulationExplorer,
     SignalWire,
     PacketRouting,
     SlidingWindow,

@@ -88,8 +88,8 @@ export default async function LayerPage({ params }: Params) {
         <section className="mt-12">
           <h2 className="font-serif text-xl font-semibold">Sources & further reading</h2>
           <ul className="mt-3 space-y-1 text-sm">
-            {sources.map((s) => (
-              <li key={s.href}>
+            {sources.map((s, i) => (
+              <li key={`${i}-${s.href}`}>
                 <a
                   href={s.href}
                   target="_blank"

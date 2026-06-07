@@ -13,7 +13,9 @@ and where a surprising share of "network" faults actually live.
 
 ## Twisted-pair copper
 
-Ethernet over copper uses four **twisted pairs**. The twisting is not cosmetic: it makes each pair a
+Gigabit Ethernet and faster (1000BASE-T, 10GBASE-T) use all four **twisted pairs** bidirectionally;
+the older 10/100BASE-T variants use only two of the four (one to transmit, one to receive). The twisting
+is not cosmetic: it makes each pair a
 **balanced** transmission line so that external interference hits both wires equally and cancels at the
 receiver, and it limits **crosstalk** between pairs. Tighter twists and better shielding push the usable
 frequency — and thus the data rate — higher.
@@ -65,8 +67,9 @@ the speed:
 
 Within a rack you often skip optics entirely: a **DAC** (Direct Attach Copper) is a fixed twinax cable
 with transceiver ends — cheap and low-power for a few meters — while an **AOC** (Active Optical Cable)
-embeds the optics for longer reach without handling loose fiber. Each module still runs the link's
-[line coding](../signal-encoding/) (8B/10B, 64B/66B, or PAM4) internally.
+embeds the optics for longer reach without handling loose fiber. (A *passive* DAC has no electronics at
+all — just shielded twinax; the host's PHY/PCS does the [block coding](../signal-encoding/), 8B/10B or
+64B/66B, and drives the line modulation, NRZ or PAM4.)
 
 ## Power over Ethernet
 

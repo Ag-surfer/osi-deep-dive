@@ -11,8 +11,10 @@ The [Physical layer](../../physical/) hands up an undifferentiated stream of bit
 the [Data Link layer](../../data-link/) must mark **frame boundaries** so the receiver knows where one
 frame stops and the next starts. Three approaches:
 
-- **Length field** — prefix each frame with its byte count (Ethernet implicitly uses framing at the PHY
-  plus a length/type field). Simple, but a corrupted length desynchronizes everything after it.
+- **Length field** — prefix each frame with its byte count so the receiver knows where it ends (as
+  DEC's DDCMP did). Simple, but a corrupted length desynchronizes everything after it. (**Ethernet does
+  *not* frame this way** — its boundaries come from the Physical layer's preamble/SFD and inter-frame
+  gap; its Length/Type field only describes the payload to upper layers, it doesn't mark the frame end.)
 - **Byte (character) stuffing** — delimit frames with a special **flag** byte, and escape any flag that
   appears in the payload with an escape byte (which is itself escaped). PPP does this.
 - **Bit stuffing** — HDLC marks frames with the flag `01111110` and, in the payload, **inserts a 0

@@ -70,9 +70,10 @@ Its guarantees rest on two requirements worth knowing:
 ## Security considerations
 
 <Callout variant="security" title="When the trust model is abused">
-- **Golden / silver tickets** — an attacker who steals the KDC's master key (the `krbtgt` account) can
-  forge TGTs (golden) or service tickets (silver) for anyone. Protect and rotate that key; KDC
-  compromise is game-over for the realm.
+- **Golden ticket** — forging a **TGT** with the **`krbtgt`** account's key (full KDC compromise → mint
+  tickets for anyone). **Silver ticket** — forging a **service ticket** with a single **target service
+  account's** key, *without ever contacting or compromising the KDC* — narrower in scope but stealthier.
+  Protect and rotate `krbtgt`; KDC compromise is game-over for the realm.
 - **Pass-the-ticket** — stealing a valid ticket from a compromised host and reusing it; limit ticket
   lifetimes and protect endpoint memory.
 - **Weak password-derived keys** — offline cracking of captured AS material (AS-REP / Kerberoasting of
