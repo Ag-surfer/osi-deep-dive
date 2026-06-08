@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PacketJourney } from "@/components/PacketJourney";
-import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
+import { EncapsulationExplorer } from "@/components/diagrams/EncapsulationExplorer";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata = pageMetadata({
@@ -40,7 +40,7 @@ export default function JourneyPage() {
           remember the receiver does the exact reverse.
         </p>
         <div className="mt-4">
-          <EncapsulationVisualizer />
+          <EncapsulationExplorer />
         </div>
       </section>
 

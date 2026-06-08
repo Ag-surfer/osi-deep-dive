@@ -38,13 +38,48 @@ enforced in CI by `.github/workflows/lighthouse.yml` on every push/PR (fails on 
 
 - `lib/layers.ts` is the **single source of truth** — nav, stack, routing (`generateStaticParams`),
   prev/next all derive from it. Add a layer here + a `content/layers/<slug>.mdx` file.
+- **Sub-topics (deep dives) nest under a layer.** Add a `TopicMeta` to a layer's `topics[]` in
+  `lib/layers.ts` **and** create `content/layers/<layer-slug>/<topic-slug>.mdx`. The nested route
+  `app/layers/[slug]/[topic]/page.tsx` prerenders every declared `(layer, topic)` pair with
+  `dynamicParams = false` — so a topic listed without its MDX file **breaks the build**. The sidebar
+  (`LayerNav`), breadcrumb (`TopicHero`), in-layer prev/next (`TopicPrevNext`), the layer page's
+  "Deep dives" cards, and the sitemap all derive from `topics[]`/`ALL_TOPICS` automatically.
 - Content is **MDX**; custom components (`HeaderDiagram`, `Callout`, `Quiz`, `WorkedExample`,
   `SequenceDiagram`, `ProtocolTable`, `RFCRef`, `KeyTerm`) are registered in `mdx-components.tsx` and
   usable in any `.mdx` without imports.
 - `HeaderDiagram` is driven by a `fields: {name,bits,desc,variable?}[]` spec — **bits must sum to the
   real header size** (verify against the RFC).
+- **Interactive routing-algorithm diagrams** share one engine. `components/diagrams/StepPlayer.tsx` is
+  the common chrome — it owns the step index, autoplay (suppressed under reduced motion), keyboard
+  stepping, the aria-live narration line, and the Prev/Next/Play/Restart controls; each viz only renders
+  the *visual* for a step via the `renderStep(i)` / `narration(i)` props. Two visual families sit on top:
+  `RoutingAlgoViz.tsx` (a **graph** player — nodes/edges/tree, used for SPF/Dijkstra),
+  `DecisionTableViz.tsx` (an **elimination table** — rows struck out as ordered rules fire, used for BGP
+  best-path), `CongestionControlViz.tsx` (a **time-series chart** — a value plotted per step, used for
+  the TCP cwnd sawtooth), `CrcViz.tsx` (a **monospace long-division** — the working register with the
+  divisor aligned, used for CRC), `LineCodingViz.tsx` (a **stacked-waveform** builder revealed
+  bit-by-bit, used for NRZ/Manchester line coding), and `EyeDiagramViz.tsx` (an **overlaid-trace eye
+  diagram** that closes as jitter/noise grow, used for signal integrity), and `HuffmanViz.tsx` (a
+  **tree-building** viz that reveals merges against a precomputed layout, used for Huffman coding), and
+  `SequenceWalkViz.tsx` (a **stepped sequence diagram** — actors as columns, messages revealed per step,
+  colored by intent). Two families are reused beyond their first use: `SpanningTreeViz.tsx` feeds
+  `RoutingAlgoViz` from an STP stepper (root election + least-cost-to-root *is* a rooted SPF), and both
+  `DnsResolutionViz.tsx` and `KerberosViz.tsx` are thin wrappers over `SequenceWalkViz` (DNS resolution;
+  the Kerberos ticket exchange). The *logic* lives in pure, unit-tested steppers under `lib/algorithms/`
+  (`dijkstra.ts`/`stp.ts` → `AlgoStep[]`; `bgpBestPath.ts` → `DecisionStep[]`; `congestion.ts` →
+  `CwndPoint[]`; `crc.ts` → `CrcStep[]`; `lineCoding.ts` → half-bit samples; `eyeDiagram.ts` → overlaid
+  traces + eye metrics; `huffman.ts` → laid-out tree + merge steps; `dnsResolution.ts`/`kerberos.ts` →
+  actors + message steps). To add one: write a pure `…Steps(): Step[]`
+  generator (+ a `.test.ts`), then a thin MDX wrapper (like `DijkstraViz.tsx` / `BgpBestPathViz.tsx`)
+  that `useMemo`s the steps and renders the matching family. Register the wrapper in `mdx-components.tsx`.
+  Graph topologies are declared as data (`{id,x,y,label}` nodes + `{a,b,cost}` edges) in the MDX — keep
+  coords inside the ~620×320 viewBox and non-overlapping.
 
 ## Lessons Learned (compounding — append, don't delete)
+
+- **A layer/topic page's `sources` array is keyed by `href`** in the page component, so **two entries
+  with the same URL trigger a React duplicate-key error** (and only show at runtime, not in the build).
+  Keep every source href unique within a page; the key now includes the index as a backstop.
 
 - **Next 16 builds with Turbopack by default.** MDX remark/rehype plugins must be passed as
   serializable **string names** (`remarkPlugins: [["remark-gfm"]]`), NOT imported functions, or the

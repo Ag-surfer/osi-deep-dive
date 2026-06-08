@@ -1,0 +1,106 @@
+export const sources = [
+  { label: "ISO/IEC 7498-1 — The OSI Basic Reference Model (Session layer)", href: "https://www.iso.org/standard/20269.html" },
+  { label: "RFC 5531 — RPC: Remote Procedure Call Protocol v2", href: "https://www.rfc-editor.org/rfc/rfc5531.html" },
+  { label: "gRPC — A high-performance, open-source RPC framework", href: "https://grpc.io/docs/what-is-grpc/" },
+  { label: "RFC 6455 — The WebSocket Protocol", href: "https://www.rfc-editor.org/rfc/rfc6455.html" },
+];
+
+## What the Session layer is for
+
+Above the [Transport layer](../../transport/)'s raw connection, the **Session layer** manages the
+*dialogue* between two applications: **establishing** a session, **synchronizing** it (checkpoints so a
+long exchange can resume after a failure), controlling **whose turn it is** to talk, and **tearing it
+down** gracefully. A connection moves bytes; a session gives those bytes a beginning, a middle with
+recoverable structure, and an orderly end.
+
+<Callout variant="insight" title="Why this layer feels 'missing' — and isn't">
+In the TCP/IP world there's no distinct session protocol; the OSI session responsibilities were
+**absorbed** into the transport (TCP/QUIC connection lifecycle), the application, and libraries. But the
+*concepts* are everywhere once you look:
+- **TCP/QUIC connections** carry the establish/teardown role; QUIC's connection IDs even let a session
+  survive a network change.
+- **[TLS](../../transport/tls/) session resumption** (tickets/PSK) is literally session reuse.
+- **[HTTP](../../application/http/) cookies/sessions** rebuild stateful sessions over a stateless protocol.
+- **WebSocket** (<RFCRef n={6455} />) upgrades an HTTP request into a persistent, full-duplex session.
+- **SIP dialogs** manage the session for a VoIP call; **database connections** are sessions with state.
+The session layer didn't disappear — it dissolved into the layers around it.
+</Callout>
+
+## Dialogue control and synchronization
+
+Two classic session jobs:
+
+- **Dialogue control** — deciding who may transmit. A **full-duplex** session lets both sides talk at
+  once; a **half-duplex** one passes a token back and forth so only one speaks at a time (think of a
+  walkie-talkie's "over").
+- **Synchronization (checkpoints)** — inserting **sync points** into a long exchange so that, after a
+  crash, both sides can roll back to the last checkpoint and resume rather than restart. The modern echo
+  is a **resumable upload** (byte-range / tus): transfer a 5 GB file, lose the link at 4 GB, and continue
+  from the checkpoint instead of from zero.
+
+## RPC: making a remote call look local
+
+The most important session-layer idea in practice is **Remote Procedure Call** — invoking a function on
+another machine as if it were local. A **client stub** marshals the arguments into a message, the call
+travels over a session, a **server stub** unmarshals and runs the real function, and the result returns
+the same way. **gRPC** is the modern incarnation: [Protocol Buffers](../../presentation/serialization/)
+for the messages over an [HTTP/2](../../application/http/) session, with streaming and strong typing.
+
+<Callout variant="warning" title="RPC's leaky abstraction: the fallacies of distributed computing">
+RPC makes a network call *look* like a local one — but it isn't, and pretending otherwise causes
+outages. The network is **not** reliable, **not** zero-latency, **not** infinite-bandwidth, and **not**
+secure. A local function call doesn't time out, get partially applied, or vanish mid-execution; a remote
+one does all three. Good distributed systems treat RPCs as what they are — fallible messages needing
+**timeouts, retries (with idempotency), and partial-failure handling** — rather than trusting the
+"looks local" illusion.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in session management">
+- **Random logouts** — session expiry or a load balancer routing requests to a server without the
+  session state (no shared session store / sticky sessions).
+- **Orphaned / half-open sessions** — one side vanished without a clean teardown; the other holds state
+  until a keepalive or timeout reaps it. Watch for resource leaks.
+- **RPC hangs forever** — no client-side timeout, so a lost or slow server stalls the caller; always
+  bound RPCs with deadlines.
+- **Duplicate side effects after a retry** — a non-idempotent RPC retried after a timeout that actually
+  succeeded; use idempotency keys.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why is there no distinct 'session protocol' in the TCP/IP stack?",
+      options: [
+        "Sessions aren't needed on the internet",
+        "The OSI session responsibilities were absorbed into the transport (connection lifecycle), the application, and libraries (TLS resumption, cookies, WebSocket) rather than a standalone layer",
+        "TCP forbids sessions",
+      ],
+      answer: 1,
+      explanation: "TCP/IP didn't keep a separate session layer; its jobs — establish/teardown, resumption, dialogue state — were folded into TCP/QUIC connections, application logic, and libraries. The concepts persist even though the dedicated layer doesn't.",
+    },
+    {
+      q: "What is the central illusion (and danger) of Remote Procedure Call?",
+      options: [
+        "It makes local calls slower",
+        "It makes a network call look like a local function call, hiding that the network is unreliable, has latency, and can fail partially — so callers must add timeouts, retries, and partial-failure handling",
+        "It only works within one process",
+      ],
+      answer: 1,
+      explanation: "RPC's convenience is that a remote call looks local, but a remote call can time out, partially apply, or disappear. Treating it like a guaranteed local call causes failures; robust systems handle it as a fallible message.",
+    },
+    {
+      q: "What modern feature most directly echoes the OSI session layer's 'synchronization checkpoint' idea?",
+      options: [
+        "DNS caching",
+        "Resumable uploads / byte-range transfers that continue from the last checkpoint after a failure instead of restarting",
+        "TCP's checksum",
+      ],
+      answer: 1,
+      explanation: "Sync points let a long exchange resume from the last checkpoint after a crash. Resumable uploads (e.g. byte-range or tus) implement exactly that — continuing a large transfer from where it stopped rather than from the beginning.",
+    },
+  ]}
+/>

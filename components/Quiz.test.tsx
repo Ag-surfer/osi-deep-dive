@@ -21,7 +21,7 @@ describe("Quiz", () => {
   it("reveals correct feedback and explanation after picking the right answer", () => {
     render(<Quiz questions={questions} />);
     fireEvent.click(screen.getByText("Network"));
-    expect(screen.getByText(/^Correct\.$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Correct!/)).toBeInTheDocument();
     expect(screen.getByText(/logical addressing and routing/i)).toBeInTheDocument();
   });
 

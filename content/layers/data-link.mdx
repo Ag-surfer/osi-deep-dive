@@ -80,12 +80,13 @@ the **Spanning Tree Protocol (STP)**.
 When a host knows a destination's **IP** but needs its **MAC** to build a frame, it uses **ARP**
 (<RFCRef n={826} />) — the glue between Layer 3 and Layer 2:
 
-<SequenceDiagram
+<SequenceWalk
+  title="ARP — resolving an IP to a MAC"
   actors={["Host A", "LAN (broadcast)", "Host B"]}
   steps={[
-    { from: 0, to: 1, label: "ARP Request: who has 192.0.2.5? (broadcast)" },
-    { from: 1, to: 2, label: "flooded to all hosts" },
-    { from: 2, to: 0, label: "ARP Reply: 192.0.2.5 is at a4:5e:60:… (unicast)", dashed: true },
+    { from: 0, to: 1, label: "ARP Request: who has 192.0.2.5?", note: "Host A knows the destination IP but needs its MAC to build a frame. It broadcasts the question to the whole segment." },
+    { from: 1, to: 2, label: "flooded to all hosts", note: "The broadcast reaches every host on the LAN. Each checks whether the requested IP is its own; all but one ignore it." },
+    { from: 2, to: 0, label: "ARP Reply: ...is at a4:5e:60:…", accent: "good", dashed: true, note: "The owner of 192.0.2.5 replies (unicast) with its MAC. Host A caches the IP→MAC mapping and can now send the frame. (No authentication here — the weakness ARP spoofing exploits.)" },
   ]}
   caption="ARP resolves an IP address to a MAC address before the first frame can be sent."
 />

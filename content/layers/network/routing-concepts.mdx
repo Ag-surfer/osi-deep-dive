@@ -1,0 +1,233 @@
+export const sources = [
+  { label: "RFC 2328 — OSPF Version 2", href: "https://www.rfc-editor.org/rfc/rfc2328.html" },
+  { label: "RFC 4271 — A Border Gateway Protocol 4 (BGP-4)", href: "https://www.rfc-editor.org/rfc/rfc4271.html" },
+  { label: "RFC 2453 — RIP Version 2", href: "https://www.rfc-editor.org/rfc/rfc2453.html" },
+  { label: "RFC 7868 — Cisco EIGRP", href: "https://www.rfc-editor.org/rfc/rfc7868.html" },
+  { label: "Bellman–Ford and Dijkstra — algorithmic background", href: "https://en.wikipedia.org/wiki/Shortest_path_problem" },
+];
+
+## What a routing protocol actually computes
+
+Every router holds a **RIB** (Routing Information Base — the control-plane database of all
+candidate routes) and installs the winners into the **FIB** (Forwarding Information Base — the
+data-plane table consulted per packet). A routing protocol's only job is to **populate the RIB with
+loop-free, shortest-by-some-metric paths**, and to **reconverge** when the topology changes.
+
+Everything below — RIP, OSPF, IS-IS, EIGRP, BGP — is a different answer to three questions:
+
+1. **What information do I share, and with whom?** (My whole table, or just reachability?)
+2. **What algorithm turns that information into a best path?** (Bellman–Ford, Dijkstra, DUAL, policy.)
+3. **How do I guarantee I never form a loop**, even mid-convergence?
+
+<Callout variant="insight" title="Routing ≠ forwarding (the distinction that explains everything)">
+**Forwarding** is the per-packet hardware action: read destination, longest-prefix-match the FIB,
+send out an interface — billions of times per second. **Routing** is the slow, periodic control-plane
+conversation that *builds* the FIB. A protocol can be slow and chatty (control plane) yet still feed a
+line-rate forwarding path. Keep these planes separate in your head and most "why is traffic
+blackholing while the protocol looks up?" puzzles dissolve.
+</Callout>
+
+## The three algorithm families
+
+| Family | Protocols | What's shared | Algorithm | View of the network |
+| --- | --- | --- | --- | --- |
+| **Distance-vector** | RIP, IGRP | "My whole table" to direct neighbors | Bellman–Ford | Only distances *via neighbors* — no map |
+| **Link-state** | OSPF, IS-IS | "Who I'm connected to" flooded to *everyone* in the area | Dijkstra (SPF) | A full, identical topology map |
+| **Path-vector** | BGP | Reachable prefixes + the full AS-path | Policy + best-path | Per-prefix paths across autonomous systems |
+| **Hybrid (advanced DV)** | EIGRP | Partial updates to neighbors | DUAL (diffusing) | Distances + a feasibility condition |
+
+The split is fundamental: **distance-vector routers route on rumor** (they trust a neighbor's summary
+of distance without ever seeing the map), while **link-state routers each build an identical map and
+compute their own shortest paths**. That single difference drives every trade-off — convergence speed,
+loop behavior, CPU/memory cost, and scalability.
+
+### Distance-vector: Bellman–Ford and the cost of rumor
+
+A distance-vector router knows only `D(dest) = min over neighbors n of [ cost(n) + D_n(dest) ]`. It
+never sees the topology — it trusts each neighbor's advertised distance. Cheap in CPU and memory, but
+"routing on rumor" creates the classic failure: the **count-to-infinity** problem.
+
+<SequenceWalk
+  title="Distance-vector count-to-infinity"
+  actors={["Net X", "Router A", "Router B"]}
+  steps={[
+    { from: 0, to: 1, label: "X is directly connected (cost 0)", note: "Router A is physically attached to network X, so it advertises a distance of 0 to reach X — the ground truth that every other router's distance is ultimately derived from.", accent: "good" },
+    { from: 1, to: 2, label: "I can reach X at cost 1", note: "A tells its neighbor B that it can reach X. B records X as reachable at cost 1 via A — but B has no map, so it only knows the advertised distance, not the path.", accent: "good" },
+    { from: 0, to: 1, label: "✗ link to X fails", dashed: true, note: "The link from A to X goes down. A now has no direct route to X and should converge on 'unreachable', but B hasn't heard the bad news yet.", accent: "warn" },
+    { from: 2, to: 1, label: "But *I* can reach X at cost 2! (stale rumor)", dashed: true, note: "Before A's withdrawal propagates, B advertises its own stale route to X (cost 2, actually via A). A trusts this rumor without realizing the path loops back through itself.", accent: "warn" },
+    { from: 1, to: 2, label: "Then I reach X at cost 3… (via you)", note: "A now believes it can reach X at cost 3 through B, and re-advertises that. Neither router can see that the route is circular — this is the cost of routing on rumor with no topology map.", accent: "warn" },
+    { from: 2, to: 1, label: "…then 4… then 5… (counting to infinity)", dashed: true, note: "Each exchange increments the metric by one hop, climbing slowly toward 'infinity'. RIP caps infinity at 16 precisely so this counting terminates quickly instead of looping forever.", accent: "warn" },
+  ]}
+  caption="When the link to X fails, A believes B's stale route back to itself. The bogus metric climbs one hop at a time until it hits 'infinity' (16 in RIP)."
+/>
+
+Distance-vector protocols bolt on a stack of anti-loop hacks to survive this:
+
+- **Split horizon** — never advertise a route back out the interface you learned it on.
+- **Poison reverse** — actually advertise it back, but with an *infinite* metric, to actively kill it.
+- **Hold-down timers** — ignore new information about a route for a while after it goes bad.
+- **Triggered updates** — send changes immediately instead of waiting for the periodic timer.
+- **"Infinity" = 16** in RIP — deliberately tiny so counting terminates fast, which also caps network
+  diameter at 15 hops. That ceiling is *why* RIP can't scale, not an accident.
+
+### Link-state: flood the map, run Dijkstra locally
+
+A link-state router describes **only its own directly connected links** in a Link-State Advertisement
+(LSA / LSP) and **floods** it reliably to every router in the area. Once every router holds the same
+**Link-State Database (LSDB)**, each independently runs **Dijkstra's SPF** to build a shortest-path
+tree rooted at itself. No rumor — everyone computes from the same map, so the *persistent* loops and
+count-to-infinity of distance-vector don't occur and convergence is fast. (Brief **transient
+micro-loops** can still form while routers update their FIBs at slightly different times — a routine,
+well-studied effect that loop-free-alternate and ordered-FIB techniques mitigate.) The cost is CPU
+(running SPF), memory (storing the whole LSDB), and flooding overhead — which is exactly why link-state
+protocols introduce **areas** to bound the blast radius.
+
+<Callout variant="note" title="Why link-state needs areas, and distance-vector doesn't">
+SPF is `O(E log V)` and the LSDB grows with the area. Double the routers and every router does more
+work and holds more state. **Areas** (OSPF) and **levels** (IS-IS) partition the domain so SPF runs
+over a small LSDB and only summary routes cross boundaries. Distance-vector has no map to store, so it
+never needed areas — it just doesn't scale for other reasons (slow convergence, hop limits).
+</Callout>
+
+### Path-vector: when the metric is policy, not distance
+
+BGP doesn't optimize a numeric "distance" at all — between competing companies, *shortest* is
+meaningless. It carries the entire **AS-path** with each prefix (which provides loop detection — a
+router rejects any route already containing its own AS number) and selects routes by a **policy
+pipeline**, not a shortest-path algorithm. That's the whole reason BGP exists as a separate category.
+
+## Metrics: what "best" means to each protocol
+
+| Protocol | Metric | Range / basis | Note |
+| --- | --- | --- | --- |
+| **RIP** | Hop count | 1–15 (16 = unreachable) | Ignores bandwidth entirely — a 15-hop fiber path loses to a 1-hop dial-up |
+| **OSPF** | Cost = reference-BW / link-BW | Lower is better | Default reference BW (100 Mbps) makes all links ≥ 100 Mbps tie at cost 1 — **raise the reference BW** in modern networks |
+| **IS-IS** | Wide metric | 24-bit (narrow: 6-bit) | Default 10 per link; tune for traffic engineering |
+| **EIGRP** | Composite (BW + delay, optionally load/reliability) | 32-bit (classic) / 64-bit (wide) | K-values weight the formula; bandwidth + delay only, by default |
+| **BGP** | None — *attributes* | Policy pipeline | Weight, local-pref, AS-path length, MED, … (see the BGP page) |
+
+<Callout variant="warning" title="The OSPF reference-bandwidth trap">
+OSPF cost is `reference-bandwidth ÷ interface-bandwidth`, and the default reference bandwidth is
+**100 Mbps**. Cost is an integer with a floor of 1, so a 1 Gbps, a 10 Gbps, and a 100 Gbps link **all
+get cost 1** and become indistinguishable. Set `auto-cost reference-bandwidth` consistently
+domain-wide (e.g. to 100 Gbps) or SPF will happily choose a slower path. This is one of the most common
+real-world OSPF design mistakes.
+</Callout>
+
+## Administrative distance: choosing between protocols
+
+A single router often learns the *same* prefix from several sources — a static route, OSPF, and BGP at
+once. **Administrative distance (AD)** is the tiebreaker: the *trustworthiness* of the source, checked
+**before** the metric. Lowest AD wins; metric only breaks ties *within* one protocol.
+
+| Source | Default AD (Cisco) |
+| --- | --- |
+| Connected interface | 0 |
+| Static route | 1 |
+| eBGP | 20 |
+| EIGRP (internal) | 90 |
+| OSPF | 110 |
+| IS-IS | 115 |
+| RIP | 120 |
+| EIGRP (external) | 170 |
+| iBGP | 200 |
+| Unreachable / unusable | 255 |
+
+<Callout variant="insight" title="AD is local, and that's a footgun">
+AD is **per-router**, not advertised. Two routers can disagree about which protocol to trust for the
+same prefix, producing an **asymmetric or looping** path even though each router individually "did the
+right thing." This bites hardest during **route redistribution**, below.
+</Callout>
+
+## Route redistribution: the expert-level minefield
+
+Redistribution injects routes from one protocol into another (OSPF ↔ BGP, EIGRP ↔ OSPF, …). It's
+unavoidable at boundaries — and the richest source of production outages, because **metrics don't
+translate** and **loop-prevention guarantees stop at the protocol boundary**.
+
+- **Seed metric** — the receiving protocol has no idea what a "cost 30" from another protocol means,
+  so you must define a starting metric. EIGRP even refuses to redistribute without a default metric.
+- **Mutual redistribution loops** — redistribute OSPF→BGP *and* BGP→OSPF at two points and an external
+  route can loop back in as if native, with a more-attractive AD. Classic blackhole.
+- **AD manipulation** is the standard defense: lower the AD of *native* routes, or tag redistributed
+  routes (route maps) and deny those tags from coming back in.
+- **One-way + summarize** wherever possible; mutual redistribution at multiple points needs tagging.
+
+<WorkedExample title="A two-point redistribution loop, and the tag that stops it">
+Routers R1 and R2 both connect an OSPF domain to an EIGRP domain and mutually redistribute.
+
+1. A prefix `P` originates in OSPF. R1 redistributes `P` into EIGRP (now an EIGRP external, AD 170).
+2. That EIGRP external reaches R2, which redistributes it **back into OSPF** as an external (AD 110).
+3. On some router, the redistributed-back OSPF external (AD 110) beats the genuine path — and traffic
+   for `P` now follows a fabricated route. A loop or blackhole forms.
+4. **Fix:** on redistribution into EIGRP, tag the routes (e.g. tag 100). On redistribution back into
+   OSPF, a route map **denies anything carrying tag 100**. The route can never re-enter its origin
+   domain. Tags are the seatbelt for every mutual-redistribution boundary.
+</WorkedExample>
+
+## Convergence: the metric that actually matters operationally
+
+**Convergence time** = detect the change → propagate it → recompute → install the new FIB. During that
+window, packets are lost or looped. Each family converges differently:
+
+- **Link-state** is fast: a failure floods immediately and every router re-runs SPF. Tuned with LSA
+  throttling, SPF timers, and **BFD** (sub-second failure detection independent of protocol hellos).
+- **EIGRP** is fastest *when a feasible successor exists* — it fails over instantly to a precomputed
+  backup with **zero recomputation**. Without one, it must go **active** and query neighbors (the
+  slow, risky **Stuck-In-Active** path).
+- **Classic distance-vector (RIP)** is slow by design — periodic timers and hold-downs measured in
+  tens of seconds.
+- **BGP** is deliberately slow and damped (timers, route-flap damping) — global stability is valued
+  over fast reaction.
+
+## ECMP and load sharing
+
+When multiple paths tie on the deciding criterion, routers can install **Equal-Cost Multi-Path** and
+hash flows across them. Two non-obvious rules:
+
+- The hash is **per-flow** (typically the 5-tuple), not per-packet — so a single TCP flow stays on one
+  path and never reorders, but it also can't exceed one path's bandwidth.
+- EIGRP uniquely supports **unequal-cost** load sharing via the **`variance`** multiplier, sending
+  proportionally more traffic over better paths — something no link-state protocol does.
+
+<Callout variant="security" title="Control-plane trust is the real attack surface">
+Routing protocols distribute *trust*, so the attacks target the conversation, not the packets:
+**false LSA/route injection**, **neighbor spoofing**, and (in BGP) **prefix hijacking**. Defenses are
+consistent across protocols: **authenticate adjacencies** (MD5/SHA, IS-IS/OSPF/BGP all support it),
+**filter what you accept** (prefix lists, max-prefix limits, RPKI for BGP origin validation), and use
+**GTSM/TTL-security** so off-path attackers can't even reach the protocol. The protocol pages cover
+each in detail.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "A router learns 10.0.0.0/24 via eBGP (AD 20), OSPF (AD 110), and a static route (AD 1). Which installs in the FIB?",
+      options: ["eBGP — it's a real-time protocol", "OSPF — it has a topology map", "The static route — lowest administrative distance"],
+      answer: 2,
+      explanation: "Administrative distance is checked before any metric. Static (AD 1) beats eBGP (20) and OSPF (110). Metric only breaks ties within a single protocol.",
+    },
+    {
+      q: "Why can a link-state protocol converge without the count-to-infinity problem that plagues distance-vector?",
+      options: [
+        "It uses hold-down timers that distance-vector lacks",
+        "Every router computes paths from an identical full topology map, not from neighbors' distance rumors",
+        "It has a higher 'infinity' value",
+      ],
+      answer: 1,
+      explanation: "Link-state routers each run Dijkstra over the same flooded LSDB, so they don't trust a neighbor's summarized distance. Count-to-infinity is specifically a distance-vector pathology of routing on rumor.",
+    },
+    {
+      q: "All your core links are 10G+, yet OSPF keeps choosing an oddly slow path. The most likely cause?",
+      options: [
+        "The reference bandwidth is at its 100 Mbps default, so every fast link ties at cost 1",
+        "OSPF doesn't support 10G interfaces",
+        "Administrative distance is misconfigured",
+      ],
+      answer: 0,
+      explanation: "OSPF cost = reference-BW ÷ link-BW with an integer floor of 1. At the 100 Mbps default, every link ≥ 100 Mbps gets cost 1 and becomes indistinguishable. Raise auto-cost reference-bandwidth domain-wide.",
+    },
+  ]}
+/>

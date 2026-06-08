@@ -32,12 +32,13 @@ connection setup, sequence numbers, acknowledgments and retransmission, **flow c
 
 Before any data, TCP synchronizes sequence numbers in three messages:
 
-<SequenceDiagram
+<SequenceWalk
+  title="TCP three-way handshake"
   actors={["Client", "Server"]}
   steps={[
-    { from: 0, to: 1, label: "SYN  seq = x" },
-    { from: 1, to: 0, label: "SYN-ACK  seq = y, ack = x+1", dashed: true },
-    { from: 0, to: 1, label: "ACK  ack = y+1" },
+    { from: 0, to: 1, label: "SYN  seq = x", note: "The client picks a random initial sequence number x and asks to open the connection. No data yet." },
+    { from: 1, to: 0, label: "SYN-ACK  seq = y, ack = x+1", accent: "good", dashed: true, note: "The server acknowledges x (ack = x+1) and sends its own random ISN y. Both sides have now exchanged a SYN." },
+    { from: 0, to: 1, label: "ACK  ack = y+1", accent: "good", note: "The client acknowledges the server's ISN (ack = y+1). After this third packet both ISNs are synchronized and the connection is ESTABLISHED — data can flow." },
   ]}
   caption="Each side learns the other's initial sequence number; after the third packet the connection is established."
 />

@@ -1,0 +1,120 @@
+export const sources = [
+  { label: "RFC 5321 — Simple Mail Transfer Protocol (SMTP)", href: "https://www.rfc-editor.org/rfc/rfc5321.html" },
+  { label: "RFC 7208 — Sender Policy Framework (SPF)", href: "https://www.rfc-editor.org/rfc/rfc7208.html" },
+  { label: "RFC 6376 — DomainKeys Identified Mail (DKIM)", href: "https://www.rfc-editor.org/rfc/rfc6376.html" },
+  { label: "RFC 7489 — Domain-based Message Authentication (DMARC)", href: "https://www.rfc-editor.org/rfc/rfc7489.html" },
+];
+
+## The mail pipeline
+
+Email is a **store-and-forward** system: a message hops between independent servers, each taking
+responsibility and queuing it until the next accepts it, so delivery survives outages and the sender
+needn't wait for the recipient to be online. Three distinct jobs, on different protocols and ports:
+
+<SequenceWalk
+  title="Email store-and-forward pipeline"
+  actors={["Sender MUA", "Sender MTA", "Recipient MTA", "Recipient MUA"]}
+  steps={[
+    { from: 0, to: 1, label: "Submit message (SMTP submission :587, authenticated + TLS)", note: "The mail client hands the composed message to its outgoing server over the SMTP submission port 587, which requires the user to authenticate and encrypts the session with TLS." },
+    { from: 1, to: 2, label: "MX lookup for the domain, then SMTP relay :25 (MAIL FROM / RCPT TO / DATA)", dashed: true, note: "The sender's server resolves the recipient domain's MX record in DNS, then relays the message to that server on port 25 using the classic MAIL FROM / RCPT TO / DATA conversation.", accent: "good" },
+    { from: 2, to: 2, label: "queue, filter, deliver into the mailbox store", note: "The receiving server accepts responsibility for the message, runs spam and policy filtering, then deposits it into the recipient's mailbox store — the 'store' half of store-and-forward.", accent: "good" },
+    { from: 3, to: 2, label: "Retrieve (IMAP :993 sync, or POP :995 download)", note: "The recipient's client connects to fetch mail, using IMAP on port 993 to keep server-side state in sync across devices, or the older POP on port 995 to download (and often delete)." },
+    { from: 2, to: 3, label: "messages", dashed: true, note: "The server returns the requested messages to the client, completing the journey from sender to reader.", accent: "good" },
+  ]}
+  caption="A mail user agent submits via SMTP; servers relay it between domains via SMTP after an MX lookup; the recipient retrieves it with IMAP or POP. Three protocols, one journey."
+/>
+
+- **Submission** — your mail client (**MUA**) hands the message to its outgoing server (**MSA/MTA**) on
+  **port 587**, authenticated and over TLS.
+- **Transfer** — the sender's server looks up the recipient domain's **MX record** in [DNS](../dns/) and
+  relays the message to the recipient's server over **SMTP, port 25**, with the classic
+  `HELO/EHLO → MAIL FROM → RCPT TO → DATA` conversation. There's an **envelope** (who to deliver to,
+  used for routing) distinct from the visible **From:/To:** headers.
+- **Retrieval** — the recipient's client fetches mail with **IMAP** (server-side, keeps mail in sync
+  across devices) or the older **POP** (download, often delete).
+
+## The spoofing problem and its fix
+
+SMTP was designed in a trusting era: **nothing in the base protocol verifies the sender.** Any server can
+write any address in `MAIL FROM` or the `From:` header — which is precisely why email is the universal
+vector for **spam and phishing**. The modern defense is a trio of DNS-published policies that, together,
+let a recipient verify a message really came from the domain it claims:
+
+| Mechanism | What it checks | Published as |
+| --- | --- | --- |
+| **SPF** | Is the sending **server's IP** authorized to send for this domain? | DNS TXT record listing allowed senders |
+| **DKIM** | Is the message **cryptographically signed** by the domain, and unmodified? | A signature header; public key in DNS |
+| **DMARC** | Do SPF/DKIM **align with the visible `From:` domain**, and what to do if not? | DNS policy (none/quarantine/reject) + reporting |
+
+<Callout variant="insight" title="Why all three are needed">
+**SPF** alone breaks when mail is forwarded (the relaying IP changes) and only checks the envelope, not
+the visible `From:`. **DKIM** survives forwarding (the signature travels with the message) but doesn't,
+by itself, tie the signature to the `From:` a human sees. **DMARC** closes the loop: it requires that a
+passing SPF *or* DKIM result **align** with the `From:` domain, tells receivers what to do on failure
+(quarantine/reject), and sends the domain owner **reports** of who's sending as them. Together they turn
+"anyone can claim to be you" into "only authorized senders can." Deploying them is now table stakes for
+deliverability — without DMARC, your mail increasingly lands in spam.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Legitimate mail lands in spam** — missing or misaligned **SPF/DKIM/DMARC**; verify all three pass and
+  align with the `From:` domain.
+- **Delivery delayed by minutes** — **greylisting** (the receiver temporarily rejects unknown senders,
+  expecting a well-behaved server to retry) or a backed-up queue.
+- **Rejected as 'blocklisted'** — the sending IP's reputation is poor (shared host, prior abuse, or a
+  compromised account sending spam).
+- **Forwarded mail fails SPF** — expected; the relay's IP isn't in the original domain's SPF. DKIM and
+  DMARC alignment are what carry forwarded mail.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Securing a 40-year-old protocol">
+- **Spoofing/phishing** — the core weakness; **SPF + DKIM + DMARC** authenticate the sending domain, and
+  **BIMI** adds a verified brand logo on top.
+- **In-transit encryption** — **STARTTLS** opportunistically encrypts server-to-server SMTP, and
+  **MTA-STS / DANE** prevent an attacker from stripping it back to plaintext.
+- **Open relays** — a misconfigured MTA that relays mail for anyone becomes a spam cannon; never accept
+  unauthenticated relay for external domains.
+- **Account compromise** — a stolen mailbox sends *authenticated*, DMARC-passing spam; defended by MFA
+  and anomaly detection, not by the email protocols themselves.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why is email called a 'store-and-forward' system?",
+      options: [
+        "Messages are compressed before sending",
+        "Each server accepts and queues the message, taking responsibility for it, then forwards it to the next — so delivery tolerates outages and the recipient needn't be online",
+        "All mail is stored on the sender's device",
+      ],
+      answer: 1,
+      explanation: "Mail hops between independent servers; each stores the message and retries until the next accepts it. That decoupling means a temporary outage or offline recipient delays delivery rather than failing it.",
+    },
+    {
+      q: "Why doesn't SPF alone stop email spoofing?",
+      options: [
+        "SPF is encrypted and slow",
+        "SPF only authorizes sending IPs and checks the envelope — it breaks on forwarding and doesn't tie to the visible From: header; DKIM (signature) and DMARC (alignment + policy) are needed to complete the chain",
+        "SPF only works for internal mail",
+      ],
+      answer: 1,
+      explanation: "SPF validates the sending server's IP against the envelope domain, but forwarding changes the IP and SPF doesn't bind to the human-visible From:. DKIM signs the message (surviving forwarding) and DMARC requires SPF/DKIM to align with From: and sets the failure policy.",
+    },
+    {
+      q: "What's the main difference between IMAP and POP for retrieving mail?",
+      options: [
+        "IMAP is unencrypted, POP is encrypted",
+        "IMAP keeps mail on the server and syncs state across devices; POP typically downloads (and often deletes) mail to one device",
+        "POP supports attachments, IMAP does not",
+      ],
+      answer: 1,
+      explanation: "IMAP is server-centric: messages and read/folder state live on the server and stay in sync across all your devices. POP is download-oriented, pulling mail to a single client and frequently removing it from the server.",
+    },
+  ]}
+/>

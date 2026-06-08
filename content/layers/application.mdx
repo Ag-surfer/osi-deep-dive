@@ -56,13 +56,14 @@ this with a compact 12-byte header.
 
 A recursive resolver walks the DNS hierarchy from the root down:
 
-<SequenceDiagram
+<SequenceWalk
+  title="Recursive DNS resolution"
   actors={["Stub", "Resolver", "Root/TLD/Auth"]}
   steps={[
-    { from: 0, to: 1, label: "A? example.com (RD=1)" },
-    { from: 1, to: 2, label: "iterate: root → .com → authoritative" },
-    { from: 2, to: 1, label: "192.0.2.10", dashed: true },
-    { from: 1, to: 0, label: "answer: example.com = 192.0.2.10 (cached)", dashed: true },
+    { from: 0, to: 1, label: "A? example.com (RD=1)", note: "The stub resolver on your host asks the recursive resolver for the A record, setting RD=1 (Recursion Desired) so the resolver does the legwork on its behalf." },
+    { from: 1, to: 2, label: "iterate: root → .com → authoritative", note: "With nothing cached, the resolver iterates the hierarchy: a root server refers it to the .com TLD servers, which refer it to example.com's authoritative servers.", accent: "warn" },
+    { from: 2, to: 1, label: "192.0.2.10", dashed: true, note: "The authoritative server for the zone returns the definitive A record, 192.0.2.10, ending the iterative walk.", accent: "good" },
+    { from: 1, to: 0, label: "answer: example.com = 192.0.2.10 (cached)", dashed: true, note: "The resolver returns the final answer to the stub and caches it for the record's TTL, so subsequent lookups skip the whole hierarchy.", accent: "good" },
   ]}
   caption="Your stub resolver asks a recursive resolver, which iterates the hierarchy and caches the result."
 />

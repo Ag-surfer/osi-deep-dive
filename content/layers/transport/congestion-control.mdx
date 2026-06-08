@@ -1,0 +1,153 @@
+export const sources = [
+  { label: "RFC 5681 — TCP Congestion Control", href: "https://www.rfc-editor.org/rfc/rfc5681.html" },
+  { label: "RFC 6582 — The NewReno Modification to TCP's Fast Recovery", href: "https://www.rfc-editor.org/rfc/rfc6582.html" },
+  { label: "RFC 8312 — CUBIC for Fast and Long-Distance Networks", href: "https://www.rfc-editor.org/rfc/rfc8312.html" },
+  { label: "RFC 3168 — Explicit Congestion Notification (ECN)", href: "https://www.rfc-editor.org/rfc/rfc3168.html" },
+  { label: "Jacobson, 'Congestion Avoidance and Control' (1988)", href: "https://ee.lbl.gov/papers/congavoid.pdf" },
+  { label: "Cardwell et al., 'BBR: Congestion-Based Congestion Control' (2016)", href: "https://queue.acm.org/detail.cfm?id=3022184" },
+];
+
+## The problem: congestion collapse
+
+Flow control stops a fast sender from overrunning a slow *receiver*. **Congestion control** stops the
+collective senders from overrunning the *network* — the routers and links between them. The distinction
+is on the [Transport layer overview](../../transport/); here we go deep on the network half.
+
+In **October 1986** the early internet suffered **congestion collapse**: a link between LBL and UC
+Berkeley dropped from 32 kbit/s to **40 bit/s** — an ~800× collapse. Senders retransmitted lost packets,
+which added more load, which caused more loss, in a ruinous feedback loop. Van Jacobson's response —
+slow start and congestion avoidance — is the reason the internet still works at scale. TCP infers
+congestion from the network's only honest signal (**loss**, and later **delay** and **ECN marks**) and
+backs off *before* collapse.
+
+<Callout variant="insight" title="Two windows; the sender obeys the smaller">
+A TCP sender tracks **two** limits and may have at most `min(rwnd, cwnd)` bytes in flight:
+- **rwnd** (receive window) — flow control; advertised by the receiver.
+- **cwnd** (congestion window) — congestion control; the sender's *own* estimate of what the network
+  can absorb. Never sent on the wire — it is inferred, not negotiated.
+Throughput is `min(rwnd, cwnd) / RTT`, so on a healthy link cwnd is usually the binding constraint.
+</Callout>
+
+## Slow start and congestion avoidance
+
+TCP grows cwnd in two regimes, split by the **slow-start threshold (ssthresh)**:
+
+- **Slow start** — probe aggressively from cold. cwnd starts at the **initial window** (≈10 segments
+  in modern stacks) and **doubles every RTT** (it rises by one MSS per ACK). "Slow" is historical
+  irony — it's exponential. It runs until cwnd reaches ssthresh or a loss occurs.
+- **Congestion avoidance** — once past ssthresh, grow *gently*: **+1 MSS per RTT** (additive increase),
+  carefully probing for more bandwidth without provoking loss.
+
+On loss, TCP reacts by **how bad** the signal is:
+
+- **Triple duplicate ACK** (three dup-ACKs) — packets after the lost one still arrive, so the network
+  is delivering: a *mild* signal. **Fast retransmit** resends immediately (no waiting for a timer), and
+  **fast recovery** halves ssthresh and cwnd, then resumes congestion avoidance. This is the
+  **multiplicative decrease**.
+- **Retransmission timeout (RTO)** — no ACKs at all: a *severe* signal. ssthresh halves, but cwnd
+  collapses all the way to **1** and slow start restarts from scratch.
+
+Step through a full run — exponential rise, linear climb, a triple-dup-ACK halving, and a timeout
+collapse:
+
+<CongestionControlViz rounds={24} initialSsthresh={16} capacity={20} timeoutAtRound={20} />
+
+<Callout variant="note" title="AIMD: why the sawtooth is the point, not a bug">
+The repeating "additive increase, multiplicative decrease" shape **is** the algorithm. Additive
+increase (+1) probes politely for spare capacity; multiplicative decrease (÷2) backs off hard the
+instant congestion appears. AIMD is what makes competing flows **converge toward a fair share** of a
+link — a gentle linear climb that everyone halves together settles into equilibrium, whereas additive-
+decrease or multiplicative-increase schemes oscillate or starve. The sawtooth is the visible signature
+of a network sharing itself fairly.
+</Callout>
+
+## The algorithm families
+
+Loss-based Reno works, but it underperforms on modern high-bandwidth, long-RTT links (a single loss
+halves a huge window) and it *fills buffers* by design. The major variants:
+
+| Algorithm | Signal | Growth | Where it shines / hurts |
+| --- | --- | --- | --- |
+| **Reno / NewReno** | Loss (dup-ACK / timeout) | AIMD linear | The classic; NewReno fixes multi-loss recovery. Slow to fill large BDP pipes |
+| **CUBIC** | Loss | **Cubic** function of time since last loss | Linux/Android default. Fills long-fat pipes fast; RTT-fair-ish but still buffer-filling |
+| **BBR** | **Model**: measured bottleneck bandwidth × min-RTT | Paces to the estimated pipe | Ignores loss as a congestion signal; high throughput, low latency — but can be unfair to loss-based flows |
+| **DCTCP** | **ECN** marks (fine-grained) | Proportional to mark fraction | Data-center fabrics with ECN-capable switches; very low queueing |
+
+<Callout variant="insight" title="BBR changed the question">
+Loss-based CC equates "a buffer somewhere is full" with "the network is congested" — so it deliberately
+fills buffers until something drops, creating **bufferbloat** (huge queueing latency). **BBR** instead
+models the path: it measures the **bottleneck bandwidth** and **minimum RTT** and paces just enough data
+to keep the pipe full *without* filling the queue (operating near the "BDP" optimum). It treats loss as
+possibly just noise, not proof of congestion — which is why it can be dramatically faster on lossy paths
+but can also crowd out well-behaved Reno/CUBIC flows. Modern AQM (CoDel, FQ-CoDel) attacks the same
+bufferbloat problem from the router side.
+</Callout>
+
+## ECN: congestion without dropping
+
+**Explicit Congestion Notification** lets a router signal congestion by **marking** a bit in the IP
+header instead of dropping the packet. The receiver echoes the CE mark back to the sender with the
+**ECE** flag; the sender reduces cwnd as if it had seen a loss and sets **CWR** on its next segment to
+signal it responded (only ECE travels receiver→sender) — but *no data was lost*, so there's no
+retransmission and no latency spike. ECN needs support at both endpoints and the routers in between;
+where deployed (notably data centers, and increasingly the public internet via L4S), it removes loss
+as the price of congestion feedback.
+
+<WorkedExample title="Why one loss cripples a long-fat pipe under Reno">
+A 10 Gbit/s link with a 100 ms RTT has a bandwidth-delay product of `10×10⁹ × 0.1 / 8 ≈ 125 MB`
+(~83,000 1500-byte segments) that must be in flight to stay full.
+
+1. A single triple-dup-ACK loss halves cwnd — from ~83,000 to ~41,500 segments.
+2. Reno climbs back at **+1 segment per RTT**. Recovering 41,500 segments at one per 100 ms RTT takes
+   `41,500 × 0.1 s ≈ 69 minutes`.
+3. During that climb the pipe is under-filled, so average throughput sits far below 10 Gbit/s.
+
+This is exactly the gap **CUBIC** (cubic growth recovers the window in seconds, not minutes) and **BBR**
+(paces to the measured BDP directly) were built to close.
+</WorkedExample>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in congestion control">
+- **Throughput far below link rate on a long-fat network** — Reno's slow recovery after loss; switch to
+  CUBIC/BBR, and ensure window scaling is on (see [TCP internals](../tcp/)).
+- **High latency under load (bufferbloat)** — loss-based CC filling a deep buffer; deploy AQM
+  (FQ-CoDel) and/or ECN.
+- **TCP incast collapse** — many senders hit one receiver (data-center map-reduce), synchronized RTOs
+  crater goodput; mitigated by smaller RTO timers, ECN/DCTCP, and application-level staggering.
+- **One flow starving others** — a BBR flow sharing a buffer with CUBIC, or a flow with a much shorter
+  RTT winning the AIMD race (RTT unfairness).
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "During slow start, how does the congestion window grow per round trip?",
+      options: ["Linearly, +1 MSS per RTT", "Exponentially, doubling each RTT", "It stays fixed until the first loss"],
+      answer: 1,
+      explanation: "Slow start increases cwnd by one MSS per ACK, which doubles it each RTT — exponential growth. It continues until cwnd reaches ssthresh or a loss occurs, then congestion avoidance takes over with linear (+1/RTT) growth.",
+    },
+    {
+      q: "Why does a timeout shrink cwnd far more aggressively than three duplicate ACKs?",
+      options: [
+        "Timeouts indicate total loss of feedback (a severe signal), so cwnd resets to 1; dup-ACKs show packets still arriving (mild), so cwnd only halves",
+        "Timeouts are caused by the receiver, dup-ACKs by the network",
+        "There is no difference; both halve cwnd",
+      ],
+      answer: 0,
+      explanation: "Three dup-ACKs mean later segments are still being delivered — the path works, so fast recovery just halves the window. A timeout means no ACKs at all: the sender assumes the pipe is empty, drops cwnd to 1, and restarts slow start.",
+    },
+    {
+      q: "What fundamentally distinguishes BBR from Reno and CUBIC?",
+      options: [
+        "BBR uses UDP instead of TCP",
+        "BBR models the bottleneck bandwidth and min-RTT to pace traffic, rather than treating packet loss as the congestion signal",
+        "BBR disables congestion control entirely",
+      ],
+      answer: 1,
+      explanation: "Reno and CUBIC are loss-based — they grow until something drops. BBR is model-based: it estimates the path's bottleneck bandwidth and minimum RTT and paces data to keep the pipe full without filling buffers, so it doesn't equate loss with congestion.",
+    },
+  ]}
+/>

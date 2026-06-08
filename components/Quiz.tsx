@@ -77,7 +77,13 @@ export function QuestionCard({
                   setPicked(oi);
                   onAnswer?.(oi === question.answer);
                 }}
-                className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:cursor-default"
+                className={`flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:cursor-default ${
+                  answered && isCorrect
+                    ? "quiz-pop"
+                    : answered && isPicked && !isCorrect
+                      ? "quiz-shake"
+                      : ""
+                }`}
                 style={{ backgroundColor: bg, borderColor: border }}
               >
                 <span
@@ -103,12 +109,14 @@ export function QuestionCard({
         })}
       </ul>
       {answered ? (
-        <div className="mt-3 text-sm" role="status" aria-live="polite">
+        <div className="quiz-reveal mt-3 text-sm" role="status" aria-live="polite">
           <p
             className="font-semibold"
             style={{ color: picked === question.answer ? "var(--ok)" : "var(--bad)" }}
           >
-            {picked === question.answer ? "Correct." : "Not quite."}
+            {picked === question.answer
+              ? ["Correct! 🎉", "Nailed it!", "Exactly right."][index % 3]
+              : ["Not quite — here's why:", "Close, but here's the catch:"][index % 2]}
           </p>
           {question.explanation ? (
             <p className="mt-1 leading-relaxed" style={{ color: "var(--fg-muted)" }}>

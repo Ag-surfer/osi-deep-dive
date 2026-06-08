@@ -1,0 +1,123 @@
+export const sources = [
+  { label: "Shannon, 'A Mathematical Theory of Communication' (1948)", href: "https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf" },
+  { label: "Nyquist, 'Certain Topics in Telegraph Transmission Theory' (1928)", href: "https://ieeexplore.ieee.org/document/5055024" },
+  { label: "IEEE 802.11 — Wi-Fi (OFDM, QAM, adaptive modulation & coding)", href: "https://standards.ieee.org/ieee/802.11/" },
+  { label: "Proakis & Salehi, Digital Communications", href: "https://www.mheducation.com/" },
+];
+
+## From baseband to a carrier
+
+[Line coding](../signal-encoding/) drives a signal straight onto a wire near DC — fine for copper, but
+useless on a channel that only passes a band of frequencies far from zero: radio, DSL, cable, optical
+fiber. There you **modulate a carrier** — vary some property of a steady sine wave to carry the bits:
+
+- **ASK** (amplitude-shift keying) — vary the carrier's amplitude.
+- **FSK** (frequency-shift keying) — vary its frequency.
+- **PSK** (phase-shift keying) — vary its phase (BPSK = 2 phases, QPSK = 4).
+
+<Callout variant="insight" title="QAM: carry more bits per symbol">
+**Quadrature Amplitude Modulation** combines amplitude *and* phase, placing symbols at points on a 2-D
+**constellation**. With *M* points, each symbol carries **log₂(M) bits**: 16-QAM = 4 bits/symbol,
+64-QAM = 6, 256-QAM = 8, and Wi-Fi 6's **1024-QAM** = 10. The catch: more points are packed closer
+together, so it takes a **higher SNR** to tell them apart. Cram too many in and noise makes neighbors
+indistinguishable — the bit error rate explodes. Every step up the QAM ladder buys throughput by
+spending noise margin.
+</Callout>
+
+## Baud vs. bit rate
+
+These are routinely confused. The **baud rate** (symbol rate) is how many symbols per second; the **bit
+rate** is `baud × bits-per-symbol`. A 1,000-baud link using 256-QAM (8 bits/symbol) carries 8,000 bits/s.
+This is why "9,600 baud" and "9,600 bps" are only equal for 2-level signaling — the moment you use a
+richer constellation they diverge.
+
+## OFDM: many slow carriers beat one fast one
+
+Pushing symbols faster through a real channel makes them smear into each other (**inter-symbol
+interference** from multipath echoes). **Orthogonal Frequency-Division Multiplexing** sidesteps this by
+splitting the band into **hundreds of narrow, orthogonal subcarriers**, each carrying a slow QAM stream
+in parallel. Slow symbols tolerate echo; orthogonality lets the subcarriers overlap without interfering;
+and a **cyclic prefix** absorbs the remaining multipath. OFDM is why Wi-Fi, LTE/5G, DSL, and DOCSIS all
+work over hostile channels — and it pairs naturally with **adaptive modulation**, dialing each
+subcarrier's QAM up or down to the SNR it actually sees.
+
+## The two hard limits
+
+No modulation scheme escapes two theorems from the 1920s–40s:
+
+- **Nyquist (noiseless):** the maximum symbol rate over a channel of bandwidth *B* is **2B**. With *M*
+  levels, the bit rate ceiling is `2B · log₂(M)`. Nyquist answers *how many symbols per second* the
+  bandwidth allows — and says you can always send more bits by adding levels…
+- **Shannon (noisy):** …but noise caps it. The capacity of a channel with bandwidth *B* and
+  signal-to-noise ratio *SNR* is **C = B · log₂(1 + SNR)** bits/s — an absolute ceiling **no** code or
+  modulation can beat. Nyquist says "more levels = more bits"; Shannon says "only until noise drowns
+  them."
+
+<WorkedExample title="Why dial-up modems topped out near 33.6 kbps">
+A telephone channel offers roughly **B = 3,100 Hz** of usable bandwidth at an SNR of about **30 dB**.
+
+1. Convert SNR from dB to a ratio: `30 dB → 10^(30/10) = 1000`.
+2. Shannon capacity: `C = 3100 × log₂(1 + 1000) = 3100 × log₂(1001) ≈ 3100 × 9.97 ≈ 30,900 bits/s`.
+3. So **~31 kbps is the hard ceiling** of an analog phone line — which is exactly why V.34 modems
+   maxed out at 33.6 kbps. (56k modems only beat it by being *digital* at the ISP end, removing one
+   analog-to-digital conversion and its quantization noise — changing the channel, not the math.)
+4. On the symbol side: the phone channel is **passband** (~300–3,400 Hz), and a carrier-modulated
+   passband channel of bandwidth *B* carries about *B* symbols/s (QAM packs two dimensions, I and Q, per
+   symbol) — so V.34 actually ran at a **3,429-baud** symbol rate. Reaching ~33.6 kbps over it therefore
+   needs ≈ **10 bits/symbol**, which V.34 delivered with a large **trellis-coded QAM constellation
+   (~1,664 points)**. Shannon's `B·log₂(1+SNR)` caps the *bit rate* (~31–34 kbps); the constellation
+   size plus coding is how the modem chased that ceiling.
+</WorkedExample>
+
+<Callout variant="note" title="The whole game in one sentence">
+You get more bits by using more bandwidth or a denser constellation; Shannon's `B·log₂(1+SNR)` says how
+far each can take you before noise wins. Real systems (Wi-Fi, 5G, DOCSIS) chase that bound with
+**adaptive modulation and coding** plus strong [forward error correction](../../data-link/error-detection/),
+backing off the constellation as the SNR drops.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in modulation & noise">
+- **Throughput drops as you move away from the access point** — falling SNR forces a lower-order
+  modulation (256-QAM → 64-QAM → … → BPSK); the link rate steps down to stay below the error cliff.
+- **High error rate at a high data rate, fine at a lower one** — the chosen constellation is too dense
+  for the channel's SNR; the receiver can't separate adjacent symbols.
+- **Severe degradation indoors / in motion** — multipath fading and Doppler; OFDM with a cyclic prefix
+  and robust coding is the mitigation.
+- **A link that simply won't go faster despite a clean signal** — you've hit the Shannon ceiling for
+  that bandwidth and SNR; the only levers left are more spectrum or a better SNR.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "A link runs at 2,000 baud using 64-QAM. What is its bit rate?",
+      options: ["2,000 bps", "12,000 bps (2,000 × 6 bits/symbol)", "128,000 bps"],
+      answer: 1,
+      explanation: "64-QAM carries log₂(64) = 6 bits per symbol, so bit rate = baud × bits/symbol = 2,000 × 6 = 12,000 bps. Baud and bit rate are equal only for 2-level signaling.",
+    },
+    {
+      q: "What does Shannon's capacity theorem, C = B·log₂(1 + SNR), establish?",
+      options: [
+        "The minimum bandwidth a signal needs",
+        "An absolute upper bound on error-free bit rate for a given bandwidth and SNR that no code or modulation can exceed",
+        "The number of bits per QAM symbol",
+      ],
+      answer: 1,
+      explanation: "Shannon gives the hard ceiling on reliable throughput for a channel of bandwidth B and signal-to-noise ratio SNR. You can approach it with good coding, but never beat it — more bits require more bandwidth or a higher SNR.",
+    },
+    {
+      q: "Why does moving from 64-QAM to 256-QAM not always increase throughput?",
+      options: [
+        "256-QAM uses more bandwidth",
+        "Its constellation points sit closer together, needing a higher SNR; below that, noise causes errors and the link falls back to a lower order",
+        "256-QAM has fewer bits per symbol",
+      ],
+      answer: 1,
+      explanation: "Denser constellations pack symbols closer, so they require more SNR to distinguish. If the channel's SNR can't support it, the bit error rate spikes and adaptive systems drop back to a lower-order modulation — the Shannon limit in action.",
+    },
+  ]}
+/>

@@ -1,0 +1,119 @@
+export const sources = [
+  { label: "IEEE 802.3 — Ethernet (Frame Check Sequence, CRC-32)", href: "https://standards.ieee.org/ieee/802.3/" },
+  { label: "RFC 1071 — Computing the Internet Checksum", href: "https://www.rfc-editor.org/rfc/rfc1071.html" },
+  { label: "Peterson & Brown, 'Cyclic Codes for Error Detection' (1961)", href: "https://ieeexplore.ieee.org/document/4066263" },
+  { label: "Hamming, 'Error Detecting and Error Correcting Codes' (1950)", href: "https://ieeexplore.ieee.org/document/6772729" },
+];
+
+## Why the link layer checks for errors
+
+The [Physical layer](../../physical/) delivers bits, but noise, attenuation, and interference flip some
+of them. The [Data Link layer](../../data-link/) adds a **Frame Check Sequence (FCS)** so a receiver can
+**detect** a corrupted frame and discard it — recovery is left to higher layers (or to
+[ARQ](../arq-framing/)). The dominant tool is the **Cyclic Redundancy Check**, and it is dominant for a
+reason: it is cheap in hardware (just shifts and XORs) and mathematically strong against the **burst
+errors** that real channels actually produce.
+
+<Callout variant="insight" title="Detection, not correction — and that's deliberate">
+Ethernet's CRC only *detects* errors; a frame that fails the check is silently dropped. Adding enough
+redundancy to *correct* errors (forward error correction) costs bandwidth on every frame, which is
+wasteful on a low-error wired link where a retransmission is rare and cheap. FEC earns its keep where
+retransmission is expensive or impossible — deep-space links, Wi-Fi/5G radios, storage, optical — so it
+lives mostly at the Physical layer there, not in the Ethernet FCS.
+</Callout>
+
+## CRC: error detection as polynomial division
+
+A CRC treats the message as the coefficients of a binary polynomial and **divides** it by a fixed
+**generator polynomial**, using XOR arithmetic (no carries). The **remainder** is the CRC. The sender
+appends it; the receiver divides the whole frame (message + CRC) by the same generator and expects a
+**zero remainder** — anything else means the frame was corrupted. Ethernet uses a specific 33-bit
+generator to produce **CRC-32**.
+
+Step through the division on a small example:
+
+<CrcViz message="11010011101100" generator="1011" />
+
+<Callout variant="note" title="Why CRC is strong against burst errors">
+A well-chosen generator polynomial of degree *r* guarantees detection of: **all single-bit errors**,
+**all double-bit errors**, **any odd number of bit errors** (if the polynomial has the factor `x+1`),
+and **every burst error of length *r* bits or shorter**. CRC-32's 32-bit remainder makes the odds that a random
+corruption happens to produce a zero remainder about **1 in 4 billion**. That combination — burst
+robustness plus a vanishingly small miss rate, in pure shift-and-XOR hardware — is why CRC won.
+</Callout>
+
+## The Internet checksum: weaker, but cheap in software
+
+IP, TCP, and UDP use a much simpler **one's-complement sum** of 16-bit words (<RFCRef n={1071} />). It's
+trivial to compute in software and easy to update incrementally (handy when a router rewrites a TTL),
+but it's **far weaker** than a CRC — it misses reordered words and certain compensating errors. That's an
+accepted trade: it's a lightweight end-to-end backstop above a link layer whose CRC already caught the
+hard cases. (Notably, IPv6 dropped the IP-header checksum entirely, leaning on the link CRC and the
+transport checksum.)
+
+## Forward error correction in one breath
+
+Where you *can't* just retransmit, you add enough structured redundancy to **reconstruct** the original.
+**Hamming codes** (1950) add parity bits positioned so the syndrome of failed checks points directly at
+the bit to flip — single-error correction. Modern radios and storage use far stronger codes
+(Reed–Solomon, LDPC, turbo codes). The trade is always the same: FEC spends bandwidth on every block to
+avoid a round-trip, while detection-plus-retransmission spends nothing until an error actually occurs.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Rising FCS / CRC error counters on an interface** — physical-layer trouble: a bad cable, failing
+  transceiver/SFP, EMI, or a **duplex mismatch** (late collisions look like CRC errors). Check the
+  cabling and matched duplex first.
+- **Runts/giants with CRC errors** — frames truncated or oversized by a faulty NIC or driver.
+- **Good link, occasional CRC drops under load** — marginal signal integrity; reseat/replace optics or
+  shorten the run.
+- **Errors that the CRC can't catch** show up as application-layer corruption — exactly why TCP keeps
+  its own (weaker) checksum as a second line of defense.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="A CRC is integrity, not authenticity">
+A CRC detects **accidental** corruption, not **malicious** tampering: an attacker who changes the
+payload can simply recompute the CRC, and the change passes undetected. Integrity against an adversary
+requires a keyed construction — a **MAC** (HMAC) or an **AEAD** cipher (see [TLS](../../transport/tls/)).
+Never treat a checksum or CRC as a security control; it only guards against noise.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "How does a receiver use the CRC to check an Ethernet frame?",
+      options: [
+        "It recomputes the CRC and compares it to a lookup table",
+        "It divides the entire frame (message + CRC) by the same generator polynomial and checks for a zero remainder",
+        "It counts the number of 1 bits for parity",
+      ],
+      answer: 1,
+      explanation: "The CRC is the remainder of dividing the augmented message by the generator. Appending it makes the whole frame evenly divisible, so the receiver dividing message + CRC by the same generator should get remainder 0; a non-zero remainder means corruption.",
+    },
+    {
+      q: "Why is CRC-32 preferred over the Internet checksum for the Ethernet FCS?",
+      options: [
+        "It is simpler to compute in software",
+        "It is far stronger against burst errors and trivial in hardware (shifts and XORs), with a ~1-in-4-billion miss rate",
+        "It can correct errors, not just detect them",
+      ],
+      answer: 1,
+      explanation: "A CRC with a good generator detects all bursts up to its width (e.g. 32 bits for CRC-32) and all odd-bit errors, missing random corruption only ~1 in 4 billion — and it's pure shift/XOR hardware. The Internet checksum is cheaper in software but much weaker, so it's used only as a higher-layer backstop.",
+    },
+    {
+      q: "Can a CRC protect a frame against a malicious attacker modifying it?",
+      options: [
+        "Yes, the CRC is cryptographically secure",
+        "No — an attacker can recompute the CRC after changing the data; integrity against tampering needs a MAC/AEAD",
+        "Only if the frame is also fragmented",
+      ],
+      answer: 1,
+      explanation: "A CRC catches random noise, not deliberate tampering: the attacker just recomputes it. Defending against an adversary requires a keyed MAC (HMAC) or authenticated encryption, which a CRC is not.",
+    },
+  ]}
+/>

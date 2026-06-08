@@ -1,0 +1,111 @@
+export const sources = [
+  { label: "ITU-T G.810/G.8261 — Timing & synchronization definitions, SyncE", href: "https://www.itu.int/rec/T-REC-G.8261" },
+  { label: "IEEE 1588 — Precision Time Protocol (PTP)", href: "https://standards.ieee.org/ieee/1588/" },
+  { label: "ITU-T G.707 — SONET/SDH (pointers, justification)", href: "https://www.itu.int/rec/T-REC-G.707" },
+  { label: "Eye diagram & jitter — signal integrity background", href: "https://en.wikipedia.org/wiki/Eye_pattern" },
+];
+
+## Recovering the clock from the data
+
+A serial link has no separate clock wire — the receiver must figure out *where each bit is* from the
+signal itself. It does this with a **Clock and Data Recovery (CDR)** circuit: a **phase-locked loop
+(PLL)** that locks onto the signal's transitions and free-wheels through the stretches in between,
+generating a local clock aligned to the sender's. This is exactly why [line coding](../signal-encoding/)
+works so hard to guarantee transitions — a CDR starved of transitions (a long flat run) drifts out of
+lock and starts misreading bits.
+
+<Callout variant="insight" title="Jitter vs. wander">
+Real edges don't arrive exactly on the ideal clock grid — they wobble. **Jitter** is the *fast* timing
+variation (above ~10 Hz): from noise, inter-symbol interference, crosstalk, and supply ripple. **Wander**
+is the *slow* drift (below ~10 Hz): from temperature and aging of reference oscillators. A CDR's PLL
+tracks slow wander but must *tolerate* fast jitter within its margin — and that margin is exactly what an
+eye diagram measures.
+</Callout>
+
+## The eye diagram
+
+Overlay every short slice of the received signal, aligned to the recovered clock, and all the bit
+patterns pile on top of each other. The clear opening in the middle — the **eye** — is the margin the
+receiver has to decide 1 vs. 0. Its **height** is the **voltage (noise) margin**; its **width** is the
+**timing (jitter) margin**. Watch it close as impairments grow:
+
+<EyeDiagramViz />
+
+A wide-open eye means easy, error-free sampling at the center. As noise spreads the levels and jitter
+spreads the edges, the eye shrinks from both directions; when it closes, the sampler can no longer
+separate ones from zeros and the **bit error rate** climbs. The eye diagram is the single most useful
+picture of a link's physical health.
+
+## Independent clocks drift: plesiochronous vs. synchronous
+
+Two devices with their own free-running oscillators are **plesiochronous** — "almost synchronous." Even
+high-quality clocks differ by a few parts per million, so over time the receiver reads slightly more or
+fewer bits than the sender wrote: a **bit slip**. Networks handle this two ways:
+
+- **Elastic buffers + justification** — a small FIFO absorbs the difference; when it drifts too full or
+  empty, the system inserts or deletes a stuffing bit. **SONET/SDH** does this with **pointer
+  adjustments** that let a payload "float" within the frame as clocks differ.
+- **Synchronous networks** — distribute one **common timing reference** to everyone (a BITS clock
+  traceable to an atomic source), so there's no relative drift to absorb. The traditional telecom
+  approach.
+
+<Callout variant="note" title="Modern timing: SyncE and PTP">
+Packet networks broke the old synchronous TDM timing chain, so two technologies restore it for
+applications that need precise time — cellular handoff, financial timestamping, power-grid telemetry:
+- **Synchronous Ethernet (SyncE)** recovers a traceable **frequency** from the Ethernet PHY's line
+  clock (a physical-layer mechanism, unaffected by packet load).
+- **PTP / IEEE 1588** distributes **phase and time-of-day** to sub-microsecond accuracy using
+  hardware timestamps applied **at the PHY** (so software/queuing jitter doesn't corrupt them).
+Both beat **NTP** — a software, Application-layer protocol good to milliseconds — precisely because they
+push timing down to the hardware.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in timing & signal integrity">
+- **Bursty errors on certain data patterns** — a marginal eye: ISI or jitter closing it for the
+  worst-case bit sequences. Check the eye/signal-integrity, cabling, and transceiver.
+- **Loss of lock / link flaps** — the CDR can't hold the clock: too few transitions (encoding/scrambler
+  fault), excessive jitter, or a failing oscillator.
+- **Periodic bit slips on a long-haul circuit** — plesiochronous clock mismatch overrunning the elastic
+  buffer; verify the synchronization (clock source/traceability).
+- **PTP time error spikes under load** — timestamps taken in software instead of at the PHY, or a
+  non-PTP-aware switch in the path adding variable delay.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "In an eye diagram, what do the eye's height and width represent?",
+      options: [
+        "The bit rate and the bandwidth",
+        "The voltage (noise) margin and the timing (jitter) margin the receiver has to sample correctly",
+        "The number of bits and the number of symbols",
+      ],
+      answer: 1,
+      explanation: "The vertical opening is how much amplitude noise the receiver can tolerate before a 1 looks like a 0; the horizontal opening is how much timing/jitter it can tolerate. A closed eye means neither margin is left — bit errors.",
+    },
+    {
+      q: "Why does a CDR (clock-recovery) circuit depend on the line code guaranteeing transitions?",
+      options: [
+        "Transitions carry the data payload",
+        "The PLL locks to transitions to regenerate the clock; a long run without transitions lets it drift out of lock and misread bits",
+        "Transitions reduce power consumption",
+      ],
+      answer: 1,
+      explanation: "There's no separate clock wire, so the CDR's PLL recovers timing from signal transitions. Without frequent transitions (a long flat run) it free-wheels and drifts, which is exactly why line codes ensure regular transitions.",
+    },
+    {
+      q: "Why do SyncE and PTP achieve far better timing accuracy than NTP?",
+      options: [
+        "They use faster CPUs",
+        "They operate in hardware at the PHY (line-clock frequency / hardware timestamps), avoiding the software and queuing jitter that limits NTP",
+        "They run over UDP instead of TCP",
+      ],
+      answer: 1,
+      explanation: "NTP is a software, Application-layer protocol limited to millisecond accuracy by OS and network jitter. SyncE recovers frequency from the Ethernet PHY clock, and PTP timestamps at the PHY in hardware — pushing timing below the software noise floor to sub-microsecond accuracy.",
+    },
+  ]}
+/>

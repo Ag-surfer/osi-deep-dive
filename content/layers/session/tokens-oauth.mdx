@@ -1,0 +1,118 @@
+export const sources = [
+  { label: "RFC 6749 — The OAuth 2.0 Authorization Framework", href: "https://www.rfc-editor.org/rfc/rfc6749.html" },
+  { label: "RFC 7519 — JSON Web Token (JWT)", href: "https://www.rfc-editor.org/rfc/rfc7519.html" },
+  { label: "RFC 7636 — Proof Key for Code Exchange (PKCE)", href: "https://www.rfc-editor.org/rfc/rfc7636.html" },
+  { label: "OpenID Connect Core 1.0", href: "https://openid.net/specs/openid-connect-core-1_0.html" },
+];
+
+## Keeping a user logged in over a stateless protocol
+
+[HTTP is stateless](../../application/http/) — it remembers nothing between requests — yet a web app must
+keep you logged in across many of them. That is a **session** problem, solved two ways:
+
+- **Server-side sessions** — the server stores the session state and gives the browser an opaque
+  **session-ID cookie**. Stateful (needs a shared store across servers), but trivially **revocable**:
+  delete the server record and the session is dead.
+- **Tokens** — the server hands the client a **self-contained, signed token** (a **JWT**) carrying the
+  identity and claims. The server verifies the signature on each request with **no lookup** — stateless
+  and scalable — but that means it can't easily **revoke** a token before it expires.
+
+<Callout variant="note" title="JWT and bearer tokens, briefly">
+A **JWT** is `header.payload.signature`: a base64url payload of claims (who, what scopes, expiry) plus a
+signature the server checks. Because verification needs no database hit, JWTs scale horizontally — at the
+cost of revocation (you can't un-issue one), which is why access tokens are kept **short-lived** and
+paired with a **refresh token**. Most of these are **bearer tokens**: *whoever holds the token can use
+it*, no further proof — so protecting them (HTTPS, secure storage) is the whole ballgame.
+</Callout>
+
+## OAuth 2.0: delegated authorization
+
+OAuth answers a different question: *"How do I let app X access my data on service Y **without giving X
+my Y password**?"* — "Let this app see your Google Calendar." It defines four roles: the **resource
+owner** (you), the **client** (the app), the **authorization server** (issues tokens), and the
+**resource server** (holds the data). The client never sees your password; it receives a scoped,
+revocable **access token** instead.
+
+The standard **authorization-code flow**:
+
+<SequenceWalk
+  title="OAuth 2.0 authorization-code flow (with PKCE)"
+  actors={["You (browser)", "Client app", "Auth server", "Resource server"]}
+  steps={[
+    { from: 0, to: 1, label: "click 'Connect with Provider'", note: "The user initiates delegated access from inside the client app — no credentials are entered here; the app only needs to start the flow." },
+    { from: 1, to: 2, label: "redirect: /authorize? client_id, scope, redirect_uri, PKCE", note: "The client redirects the browser to the auth server's authorization endpoint, naming itself (client_id), the access it wants (scope), where to return (redirect_uri), and a PKCE challenge derived from a secret verifier." },
+    { from: 2, to: 0, label: "authenticate + consent to the requested scopes", dashed: true, accent: "good", note: "The user authenticates directly with the auth server and approves the requested scopes — the password is entered here, never seen by the client app." },
+    { from: 2, to: 1, label: "redirect back with a short-lived authorization code", dashed: true, accent: "good", note: "On consent, the auth server redirects back to the registered redirect_uri carrying a single-use code. The code is a stand-in for the token, not the token itself." },
+    { from: 1, to: 2, label: "exchange code (+ client secret / PKCE) for tokens", note: "Over a back channel, the client redeems the code, proving its identity with a client secret or the PKCE verifier that matches the earlier challenge." },
+    { from: 2, to: 1, label: "access token (+ refresh token, + ID token)", dashed: true, accent: "good", note: "The auth server returns a scoped access token, a refresh token for renewals, and (with OIDC) an ID token asserting who the user is." },
+    { from: 1, to: 3, label: "API call with Bearer access token", note: "The client calls the resource server, presenting the access token in the Authorization: Bearer header." },
+    { from: 3, to: 1, label: "protected data (scoped to the grant)", dashed: true, accent: "good", note: "The resource server validates the token and returns only the data permitted by the granted scopes — nothing broader." },
+  ]}
+  caption="The app never handles your password. It gets a one-time code via a browser redirect, exchanges it for a scoped access token, and uses that token at the resource server. PKCE binds the code to the client that started the flow."
+/>
+
+<Callout variant="insight" title="Why the indirection — code, then token">
+Handing the token straight to the browser would expose it in the URL/history. The **authorization
+code** is a short-lived, single-use stand-in: it's delivered via redirect, then exchanged **server-to-
+server** (or with **PKCE** for public clients that have no secret) for the real token over a back
+channel. **PKCE** (<RFCRef n={7636} />) stops an attacker who intercepts the code from redeeming it,
+because they lack the original secret verifier. It's now recommended for *all* clients, not just mobile.
+</Callout>
+
+## OIDC and SAML: from authorization to login
+
+OAuth grants *access*; it doesn't, by itself, tell the app **who you are**. **OpenID Connect (OIDC)**
+adds an identity layer on top: an **ID token** (a JWT of identity claims) so "Log in with Google/Apple"
+works. In the enterprise, **SAML** plays the same browser-SSO role with XML assertions — older and
+heavier, but still everywhere in corporate single sign-on.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the cause behind them">
+- **Stolen token = full access** — bearer tokens have no holder check; leaked via XSS, logs, or an
+  insecure store. Keep them short-lived, HTTPS-only, and out of `localStorage` where XSS can read them.
+- **Logout doesn't actually revoke** — a stateless JWT stays valid until it expires; use short access-
+  token lifetimes plus a refresh-token revocation list, or server-side sessions where instant revocation
+  matters.
+- **`redirect_uri` mismatch / open redirect** — the auth server must match the redirect URI exactly;
+  loose validation enables token theft.
+- **Token expired mid-session** — the client must use the refresh token to get a new access token
+  transparently, or the user gets logged out unexpectedly.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "What problem does OAuth 2.0 specifically solve?",
+      options: [
+        "Encrypting passwords in a database",
+        "Letting a user grant an app scoped, revocable access to their data on another service without sharing their password with that app",
+        "Speeding up login",
+      ],
+      answer: 1,
+      explanation: "OAuth is delegated authorization: the app receives a scoped, revocable access token from the authorization server instead of your credentials, so it can act on your data at the resource server without ever seeing your password.",
+    },
+    {
+      q: "Why does the authorization-code flow deliver a code first, then exchange it for the token, rather than returning the token directly?",
+      options: [
+        "Codes are smaller than tokens",
+        "The code is a short-lived, single-use stand-in exchanged over a back channel (with a client secret or PKCE), keeping the real token out of the browser URL/history and out of an interceptor's reach",
+        "Tokens cannot be sent over HTTPS",
+      ],
+      answer: 1,
+      explanation: "Returning the token via redirect would expose it in the URL and history. The code is exchanged server-to-server (or via PKCE), so the actual token travels over a back channel and an intercepted code alone can't be redeemed.",
+    },
+    {
+      q: "What is the main trade-off of a stateless JWT versus a server-side session?",
+      options: [
+        "JWTs are slower to verify",
+        "JWTs scale without a server lookup but can't be easily revoked before expiry; server-side sessions are instantly revocable but need a shared store",
+        "Server-side sessions can't be used over HTTPS",
+      ],
+      answer: 1,
+      explanation: "A JWT is verified by signature alone (no database hit), so it scales — but it stays valid until it expires, making revocation hard. Server-side sessions revoke instantly by deleting the record, at the cost of maintaining shared session state.",
+    },
+  ]}
+/>

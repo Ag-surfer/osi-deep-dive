@@ -1,0 +1,136 @@
+export const sources = [
+  { label: "TIA-568 — Commercial Building Telecommunications Cabling", href: "https://tiaonline.org/" },
+  { label: "IEEE 802.3bt — Power over Ethernet (Type 3/4, up to ~100 W)", href: "https://standards.ieee.org/ieee/802.3bt/" },
+  { label: "SFF / SNIA — Pluggable transceiver form factors (SFP, QSFP, QSFP-DD)", href: "https://www.snia.org/technology-communities/sff" },
+  { label: "ISO/IEC 11801 — Generic cabling (Class/Category, OM/OS fibre)", href: "https://www.iso.org/standard/66182.html" },
+];
+
+## The physical plant
+
+Beneath every protocol is hardware you can hold: the cable, the connector, the pluggable optic, and —
+increasingly — the power riding alongside the data. This is where the Physical layer is most concrete,
+and where a surprising share of "network" faults actually live.
+
+## Twisted-pair copper
+
+Gigabit Ethernet and faster (1000BASE-T, 10GBASE-T) use all four **twisted pairs** bidirectionally;
+the older 10/100BASE-T variants use only two of the four (one to transmit, one to receive). The twisting
+is not cosmetic: it makes each pair a
+**balanced** transmission line so that external interference hits both wires equally and cancels at the
+receiver, and it limits **crosstalk** between pairs. Tighter twists and better shielding push the usable
+frequency — and thus the data rate — higher.
+
+| Category | Rated for | Notes |
+| --- | --- | --- |
+| **Cat5e** | 1 GbE @ 100 m | The workhorse for a decade |
+| **Cat6** | 1 GbE @ 100 m, 10 GbE @ ~55 m | Tighter twists, less crosstalk |
+| **Cat6A** | 10 GbE @ 100 m | Shielding to tame alien crosstalk |
+| **Cat8** | 25/40 GbE @ ~30 m | Data-center top-of-rack short runs |
+
+<Callout variant="note" title="T568A vs. T568B, and why it rarely matters">
+The two TIA pinouts just swap the green and orange pairs; a cable is **straight-through** if both ends
+use the same standard. They interoperate fine as long as both ends match. (Modern gear with **Auto-MDIX**
+even fixes a straight/crossover mismatch automatically, retiring the old crossover-cable ritual.) The
+real wiring faults are **split pairs** — wires landed on the right pins but not kept as a twisted pair —
+which pass a basic continuity test yet wreck high-speed links with crosstalk.
+</Callout>
+
+## Optical fiber
+
+Where copper's distance and bandwidth run out, [fiber](../media-multiplexing/) takes over. The
+operational details are the connectors and end-faces:
+
+- **Connectors** — **LC** (small, the data-center default), **SC** (push-pull), **ST** (legacy bayonet),
+  and **MPO/MTP** (a multi-fiber ribbon connector for parallel 40/100/400G optics).
+- **Polish** — **UPC** (blue) for most data; **APC** (green, angled end-face) where back-reflection
+  must be minimal (e.g. PON, RF-over-glass). Never mate UPC to APC.
+- **Grades** — **OS2** single-mode for distance; **OM3/OM4/OM5** multi-mode for short, cost-sensitive
+  runs.
+
+<Callout variant="warning" title="The #1 fiber fault is a dirty end-face">
+A single speck of dust on a connector end-face scatters light and can drop a link or raise its error
+rate. **Inspect and clean before mating, every time.** More fiber outages trace to contamination than to
+broken glass. Respect the **minimum bend radius**, too — kinking a fiber bleeds light out of the core.
+</Callout>
+
+## Pluggable transceivers
+
+Modern switches don't hard-wire their optics; they take **hot-swappable transceivers** so one port can
+be copper, short fiber, or long-haul DWDM depending on the module you insert. The form factor encodes
+the speed:
+
+| Form factor | Typical speed | Use |
+| --- | --- | --- |
+| **SFP / SFP+ / SFP28** | 1 / 10 / 25 G | Access & server links |
+| **QSFP+ / QSFP28** | 40 / 100 G (4 lanes) | Switch uplinks, spine |
+| **QSFP-DD / OSFP** | 200 / 400 / 800 G | Modern data-center fabric |
+
+Within a rack you often skip optics entirely: a **DAC** (Direct Attach Copper) is a fixed twinax cable
+with transceiver ends — cheap and low-power for a few meters — while an **AOC** (Active Optical Cable)
+embeds the optics for longer reach without handling loose fiber. (A *passive* DAC has no electronics at
+all — just shielded twinax; the host's PHY/PCS does the [block coding](../signal-encoding/), 8B/10B or
+64B/66B, and drives the line modulation, NRZ or PAM4.)
+
+## Power over Ethernet
+
+PoE delivers DC power **and** data over the same twisted pairs, so an access point, IP phone, or camera
+needs only one cable. The standards climbed in lockstep with device appetite:
+
+| Standard | Name | Power at the device | Powers |
+| --- | --- | --- | --- |
+| **802.3af** | PoE | ~12.95 W | VoIP phones, basic APs |
+| **802.3at** | PoE+ | ~25.5 W | PTZ cameras, larger APs |
+| **802.3bt** | PoE++ (Type 3/4) | ~51 / 71 W | Wi-Fi 6/7 APs, displays, thin clients |
+
+A **PSE** (switch/injector) negotiates with the **PD** (powered device) before energizing the line, and
+the switch's total **power budget** is shared across ports — over-subscribe it and devices fail to power
+up even though the data links are fine.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in the physical plant">
+- **Link negotiates slow, or flaps under load** — a run over the category/length limit, a split pair, or
+  a marginal connector; certify the cabling.
+- **Fiber link down or high errors** — a dirty/damaged end-face (clean first), a UPC↔APC mismatch, a bend
+  past the radius, or a power budget exceeded by distance/splices.
+- **Optic won't link** — a transceiver speed/type or wavelength mismatch between ends, or a vendor lock.
+- **PoE device won't power on** — exceeded switch power budget, a cable that can't carry the wattage, or
+  a PD/PSE class mismatch — while the data link itself works perfectly.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why are the wires in an Ethernet cable twisted into pairs?",
+      options: [
+        "To make the cable easier to bend",
+        "Balanced twisted pairs cancel external interference and limit crosstalk between pairs, enabling higher data rates",
+        "To carry more pairs in the same jacket",
+      ],
+      answer: 1,
+      explanation: "Twisting makes each pair a balanced line, so interference couples equally into both wires and cancels at the receiver, and adjacent-pair crosstalk is reduced. Tighter twists allow higher frequencies and thus higher rates.",
+    },
+    {
+      q: "What is the most common cause of a failed or degraded fiber link?",
+      options: [
+        "The fiber is too long",
+        "A contaminated (dirty) connector end-face scattering the light",
+        "Using single-mode instead of multi-mode",
+      ],
+      answer: 1,
+      explanation: "Dust or oil on a connector end-face scatters light and is the leading cause of fiber faults — which is why inspect-and-clean before mating is standard practice. Bend-radius violations and budget/length issues come after.",
+    },
+    {
+      q: "A new Wi-Fi 6 access point won't power up over PoE, though its data link is fine. The most likely cause?",
+      options: [
+        "The Ethernet cable is wired T568A instead of T568B",
+        "The switch's PoE power budget is exhausted or the AP needs 802.3bt that the port doesn't supply",
+        "The fiber end-face is dirty",
+      ],
+      answer: 1,
+      explanation: "Power and data are independent: a working link with no power points at PoE. A high-draw Wi-Fi 6/7 AP may need 802.3bt (PoE++), or the switch's shared power budget across ports is exhausted — both leave the data link unaffected.",
+    },
+  ]}
+/>

@@ -65,6 +65,11 @@ You need four isolated subnets from a single `/24` (256 addresses).
 The pattern generalizes: borrow `n` host bits to make `2ⁿ` subnets, each of size `2^(32−prefix)`.
 </WorkedExample>
 
+Try it yourself — change the address or prefix and watch the network, broadcast, host range, and the
+binary network/host split recompute live:
+
+<SubnetCalculator initial="192.0.2.0/26" />
+
 ## Routing vs. forwarding
 
 These two words are often conflated; the distinction is fundamental.

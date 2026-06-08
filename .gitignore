@@ -20,3 +20,6 @@ next-env.d.ts
 
 # Lighthouse CI
 .lighthouseci/
+
+# Playwright MCP QA artifacts (snapshots, console logs)
+.playwright-mcp/

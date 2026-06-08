@@ -1,0 +1,119 @@
+export const sources = [
+  { label: "RFC 4120 — The Kerberos Network Authentication Service (V5)", href: "https://www.rfc-editor.org/rfc/rfc4120.html" },
+  { label: "Neuman & Ts'o, 'Kerberos: An Authentication Service for Computer Networks' (1994)", href: "https://gost.isi.edu/publications/kerberos-neuman-tso.html" },
+  { label: "MIT Kerberos documentation", href: "https://web.mit.edu/kerberos/" },
+  { label: "Microsoft — Kerberos authentication in Active Directory", href: "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview" },
+];
+
+## Authentication vs. authorization
+
+Two words often blurred, and the whole of access control depends on keeping them apart:
+
+- **Authentication (authN)** — proving **who you are** (the right password, key, or ticket).
+- **Authorization (authZ)** — deciding **what you may do** once your identity is established.
+
+This page is about authN: the harder, more fundamental problem of proving identity **across an untrusted
+network**, where an eavesdropper sees every byte and an impostor can replay what they capture.
+
+<Callout variant="insight" title="Why 'just send the password' fails">
+Sending a password over the network exposes it to anyone on the path, and even encrypting it doesn't
+stop a **replay** — capture the encrypted login and resend it later. And making every service store every
+user's password multiplies the places a breach can leak them. A good scheme must prove identity **without
+transmitting the secret**, **resist replay**, and **avoid spreading credentials** across services.
+Kerberos solves all three with a trusted third party and time-limited tickets.
+</Callout>
+
+## Kerberos: tickets from a trusted third party
+
+Kerberos (named for the three-headed dog guarding Hades — for its three parties) centers on a **Key
+Distribution Center (KDC)** that every user and service already shares a secret key with. The KDC has two
+faces: the **Authentication Server (AS)** that issues a **Ticket-Granting Ticket (TGT)**, and the
+**Ticket-Granting Server (TGS)** that exchanges a TGT for per-service tickets. Step through the exchange:
+
+<KerberosViz user="alice" service="fileserver" />
+
+<Callout variant="insight" title="The three things this buys you">
+- **No password on the wire** — the AS encrypts its reply with a key derived from the user's password.
+  Only the genuine user can decrypt it; that *successful decryption* is the proof, so the password itself
+  never travels and no replay of a login works.
+- **Single sign-on** — the TGT is obtained **once**. Every subsequent service is reached by exchanging
+  the TGT for a service ticket at the TGS, with no further password prompts.
+- **Services never see your password** — a service validates a ticket using its **own** key shared with
+  the KDC. It trusts the KDC's vouching, so it needn't store or ever handle user credentials.
+Kerberos is the engine behind **Active Directory** logon and most enterprise SSO.
+</Callout>
+
+## What Kerberos depends on
+
+Its guarantees rest on two requirements worth knowing:
+
+- **Synchronized clocks** — tickets and authenticators carry timestamps to defeat replay, so all hosts
+  must agree on the time within a small window (default 5 minutes). Clock skew is the classic Kerberos
+  failure.
+- **A trusted, available KDC** — the KDC knows every secret, so it is both the **root of trust** and a
+  **single point of failure**; it's replicated for availability and guarded intensely, because owning it
+  owns the realm.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in Kerberos">
+- **'Clock skew too great' (KRB_AP_ERR_SKEW)** — host clocks differ beyond the allowed window; fix time
+  sync (NTP/[PTP](../../physical/clocking-sync/)).
+- **Authentication works then fails after hours** — ticket/TGT **lifetime** expired; the client must
+  renew or re-authenticate.
+- **All logons fail across the realm** — the **KDC is unreachable** (or DNS to it is broken); KDC
+  availability is critical infrastructure.
+- **Works for one service, not another** — a missing or mismatched **service principal name (SPN)** so
+  the TGS can't issue (or the service can't validate) the ticket.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="When the trust model is abused">
+- **Golden ticket** — forging a **TGT** with the **`krbtgt`** account's key (full KDC compromise → mint
+  tickets for anyone). **Silver ticket** — forging a **service ticket** with a single **target service
+  account's** key, *without ever contacting or compromising the KDC* — narrower in scope but stealthier.
+  Protect and rotate `krbtgt`; KDC compromise is game-over for the realm.
+- **Pass-the-ticket** — stealing a valid ticket from a compromised host and reusing it; limit ticket
+  lifetimes and protect endpoint memory.
+- **Weak password-derived keys** — offline cracking of captured AS material (AS-REP / Kerberoasting of
+  service tickets); enforce strong keys/passwords and AES encryption types.
+- **Single point of trust** — because the KDC holds every secret, its security *is* the realm's security.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "How does Kerberos prove a user's identity without sending the password over the network?",
+      options: [
+        "It hashes the password and sends the hash",
+        "The AS encrypts its reply with a key derived from the user's password; only the genuine user can decrypt it, and that successful decryption is the proof",
+        "It sends the password over an encrypted channel",
+      ],
+      answer: 1,
+      explanation: "The Authentication Server returns the TGT/session key encrypted under the user's password-derived key. Only someone who knows the password can decrypt it, so the ability to use the reply proves identity — the password itself never crosses the network, defeating capture and replay.",
+    },
+    {
+      q: "What enables single sign-on in Kerberos?",
+      options: [
+        "Each service caches the password",
+        "The Ticket-Granting Ticket is obtained once and then exchanged at the TGS for per-service tickets, so no further password prompts are needed",
+        "All services share one password",
+      ],
+      answer: 1,
+      explanation: "After one authentication the client holds a TGT. For each new service it presents the TGT to the TGS and gets a service ticket — no re-entry of credentials. One login unlocks many services, which is SSO.",
+    },
+    {
+      q: "Why does Kerberos require synchronized clocks across hosts?",
+      options: [
+        "To schedule logins",
+        "Tickets and authenticators carry timestamps to prevent replay, so hosts must agree on the time within a small window or the tickets are rejected",
+        "To compress the tickets",
+      ],
+      answer: 1,
+      explanation: "Replay protection relies on timestamps with a limited validity window. If clocks drift beyond the allowed skew, valid tickets look expired or future-dated and are refused — which is why clock-skew errors are the classic Kerberos problem.",
+    },
+  ]}
+/>

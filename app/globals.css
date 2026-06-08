@@ -92,6 +92,53 @@ h4 {
   transform: translateY(0);
 }
 
+/* Quiz micro-interactions (Duolingo-style instant feedback). Auto-disabled by the
+   prefers-reduced-motion block below, which zeroes animation duration globally. */
+@keyframes quiz-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes quiz-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes quiz-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+.quiz-reveal {
+  animation: quiz-reveal 0.35s ease both;
+}
+.quiz-pop {
+  animation: quiz-pop 0.4s ease;
+}
+.quiz-shake {
+  animation: quiz-shake 0.4s ease;
+}
+
 /* Respect users who prefer less motion: disable animations, transitions, smooth scroll. */
 @media (prefers-reduced-motion: reduce) {
   html {

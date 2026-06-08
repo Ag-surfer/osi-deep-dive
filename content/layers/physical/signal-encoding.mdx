@@ -1,0 +1,120 @@
+export const sources = [
+  { label: "IEEE 802.3 — Ethernet (line coding: Manchester, 4B/5B, 8B/10B, 64B/66B)", href: "https://standards.ieee.org/ieee/802.3/" },
+  { label: "Widmer & Franaszek, '8B/10B — A DC-Balanced, Partitioned-Block Transmission Code' (1983)", href: "https://ieeexplore.ieee.org/document/5390392" },
+  { label: "USB 2.0 Specification — NRZI encoding & bit stuffing", href: "https://www.usb.org/documents" },
+  { label: "Tanenbaum & Wetherall, Computer Networks — the Physical Layer", href: "https://www.pearson.com/" },
+];
+
+## From bits to signals
+
+The [Physical layer](../../physical/) has one job: put a stream of bits onto a medium as a physical
+signal, and recover them at the far end. The naive approach — "1 = high voltage, 0 = low" (**NRZ-L**) —
+works until you ask the hard question: **how does the receiver know where one bit ends and the next
+begins?** Its clock must stay aligned with the sender's, sampling once per bit. Send `00000000` as a
+flat low voltage and the receiver, with a slightly fast or slow clock, **loses count** — was that 7
+zeros or 8? Line coding exists to solve this clock-recovery problem (and a second one, DC balance).
+
+<Callout variant="insight" title="The two properties a good line code provides">
+- **Self-clocking** — frequent, guaranteed signal **transitions** let the receiver recover the clock
+  from the data itself, so no long run of identical bits can drift it out of sync.
+- **DC balance** — equal time high and low (no net bias), so the signal survives **AC-coupled** paths
+  (transformers, capacitors) that block a DC offset, and the receiver's threshold doesn't wander.
+NRZ-L has neither; everything below is a way to buy them, trading some bandwidth for reliable recovery.
+</Callout>
+
+## The classic schemes
+
+Step through the same bit string under four encodings and watch where each places its transitions —
+note how Manchester refuses to sit still even through a run of identical bits, while NRZ-L goes flat:
+
+<LineCodingViz bits="0111110" />
+
+- **NRZ-L** — level *is* the bit. Maximally efficient (signal rate = bit rate) but no clocking and no DC
+  balance; unusable alone for long runs.
+- **NRZI** — a **transition** encodes one bit value, holding the level encodes the other, so timing
+  depends on data, not absolute level (robust to polarity inversion). The waveform above uses the
+  **NRZI-mark** convention (a *1* transitions, a 0 holds). **USB** uses the opposite **NRZI-space**
+  convention (a *0* transitions, a 1 holds) — which is exactly why USB **bit-stuffs a 0 after six
+  consecutive 1s**: a long run of 1s would otherwise produce no transitions and starve the clock.
+- **Manchester** — a transition in the **middle of every bit** (used by 10 Mb Ethernet). Perfectly
+  self-clocking and DC-balanced, but it doubles the signaling rate: a 10 Mb/s link signals at 20
+  Mbaud. That bandwidth cost is why it didn't scale past 10 Mb.
+- **Differential Manchester** — always a mid-bit transition for clocking; the **bit is encoded by the
+  presence/absence of a transition at the bit's start** (used by Token Ring). Polarity-independent.
+
+## Block codes: clocking without doubling the bandwidth
+
+Manchester's 100% overhead is too expensive at speed. **Block codes** map small groups of data bits to
+slightly larger symbols chosen to guarantee transitions and DC balance — far cheaper than doubling:
+
+| Code | Maps | Overhead | Used by |
+| --- | --- | --- | --- |
+| **4B/5B** | 4 data bits → 5-bit symbol | 25% | 100BASE-TX (Fast Ethernet), FDDI |
+| **8B/10B** | 8 data bits → 10-bit symbol | 25% | 1G Ethernet, PCIe gen1–2, Fibre Channel, SATA |
+| **64B/66B** | 64 data bits → 66-bit frame | ~3% | 10G Ethernet and up (with a scrambler) |
+| **128B/130B** | 128 bits → 130 | ~1.5% | PCIe gen3–5 (gen6 switched to PAM4 + FLIT) |
+
+<Callout variant="note" title="The shift from coding to scrambling">
+4B/5B and 8B/10B use a **lookup table** of hand-picked symbols that always contain transitions and stay
+DC-balanced — robust, but the 25% overhead hurts at 10 Gb/s. **64B/66B** instead prepends a 2-bit
+preamble (guaranteeing one transition per 66 bits) and runs the payload through a **self-synchronizing
+scrambler** that statistically breaks up long runs. You trade a guarantee for a near-certainty and
+recover ~22% of the wire — which is why everything fast (10/40/100G) uses scrambled 64B/66B, not block
+tables.
+</Callout>
+
+<Callout variant="history" title="And beyond two levels: PAM4">
+At 100G-per-lane and above, even clever binary coding hits the wall of how fast you can toggle a wire.
+Modern links move to **PAM4** — four voltage levels carrying **2 bits per symbol** — halving the symbol
+rate for a given bit rate. That's the bridge from line coding into true
+[modulation](../modulation-capacity/): once you encode multiple bits per symbol, you're trading signal
+levels (and noise margin) for bandwidth, exactly as Shannon's theorem describes.
+</Callout>
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in encoding/signal integrity">
+- **Loss of sync / bursts of errors on long data runs** — a clocking failure; an encoding without
+  guaranteed transitions (or a broken scrambler) drifting out of bit-lock.
+- **Baseline wander** — a DC-imbalanced signal through an AC-coupled path drifting the decision
+  threshold, causing errors that worsen with certain data patterns.
+- **Symbol/alignment errors after a clean physical link** — code-group or block-lock failure (e.g.
+  8B/10B disparity errors), often a marginal transceiver or a speed/encoding mismatch.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why can't NRZ-L be used alone on a fast serial link?",
+      options: [
+        "It uses too much bandwidth",
+        "A long run of identical bits has no transitions, so the receiver's clock drifts and loses bit alignment (and it has no DC balance)",
+        "It cannot represent the bit 0",
+      ],
+      answer: 1,
+      explanation: "NRZ-L holds a constant level through identical bits, giving the receiver no transitions to recover the clock from — so it can miscount bits — and it carries a DC bias that AC-coupled paths block. Line codes add guaranteed transitions and DC balance.",
+    },
+    {
+      q: "What is Manchester encoding's main drawback that block codes like 8B/10B avoid?",
+      options: [
+        "It cannot self-clock",
+        "It doubles the signaling rate (100% overhead); 8B/10B guarantees transitions with only 25%",
+        "It has no DC balance",
+      ],
+      answer: 1,
+      explanation: "Manchester puts a transition in every bit, which makes it self-clocking and DC-balanced but doubles the baud rate. Block codes like 8B/10B achieve the same guarantees with far less overhead, which is why they replaced it at higher speeds.",
+    },
+    {
+      q: "Why did 10G Ethernet move from table-based 8B/10B to scrambled 64B/66B?",
+      options: [
+        "Scrambling is more secure",
+        "64B/66B cuts the coding overhead from 25% to ~3% while still ensuring enough transitions for clock recovery",
+        "8B/10B cannot carry 64-bit data",
+      ],
+      answer: 1,
+      explanation: "8B/10B's 25% overhead is costly at 10 Gb/s. 64B/66B adds a 2-bit sync header and scrambles the payload to break up long runs, dropping overhead to ~3% while keeping the link clockable.",
+    },
+  ]}
+/>

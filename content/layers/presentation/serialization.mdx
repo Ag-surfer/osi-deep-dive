@@ -1,0 +1,117 @@
+export const sources = [
+  { label: "ITU-T X.690 — ASN.1 encoding rules (BER/CER/DER)", href: "https://www.itu.int/rec/T-REC-X.690" },
+  { label: "Protocol Buffers — encoding (varints, wire types)", href: "https://protobuf.dev/programming-guides/encoding/" },
+  { label: "RFC 8259 — The JavaScript Object Notation (JSON)", href: "https://www.rfc-editor.org/rfc/rfc8259.html" },
+  { label: "MessagePack / Apache Avro specifications", href: "https://msgpack.org/" },
+];
+
+## The serialization problem
+
+An application holds data as in-memory structures — objects, arrays, numbers with a particular byte
+order. To send them, the [Presentation layer](../../presentation/) must **serialize** (marshal) those
+structures into a flat byte sequence the receiver can **deserialize** back into its own structures,
+possibly on a different language, CPU, and endianness. The format chosen trades **human-readability**,
+**size**, **speed**, and **schema rigor** against each other.
+
+## Text vs. binary
+
+- **Text formats** — **JSON** (and **XML**) are human-readable, self-describing, and ubiquitous in web
+  APIs. The cost is size and parsing speed: numbers are ASCII digits, field names repeat on every
+  object, and there's no native binary or integer-width distinction.
+- **Binary formats** — **Protocol Buffers**, **ASN.1**, **MessagePack**, **Avro**, **Thrift** pack data
+  tightly with no whitespace or repeated key text. Smaller and faster to parse, at the cost of needing
+  tooling (and often a schema) to read.
+
+<Callout variant="insight" title="TLV: the shape of almost every binary format">
+Most binary encodings are some form of **Type–Length–Value**: a tag saying *what* a field is, a length,
+then the bytes. TLV is **self-delimiting** (you can skip a field you don't understand by jumping its
+length) and **extensible** (new fields don't break old parsers). ASN.1's **BER/DER** and countless
+network protocols are TLV underneath. **Protocol Buffers** is a close relative — a *tag + wire-type* key
+tells the decoder how to find the value's end (a varint's terminator bit, a fixed 4/8 bytes, or — only
+for length-delimited fields — an explicit length), so it's not strictly TLV but the same skip-what-you-
+don't-know idea. Learn the pattern once and binary formats stop being opaque.
+</Callout>
+
+## Schemas, tags, and varints
+
+The high-performance formats lean on a **schema** (an `.proto` / ASN.1 module) shared by both sides:
+
+- Fields are identified by small **numeric tags**, not names — so the field name never travels, and
+  fields can be reordered freely.
+- Integers use **varints** — variable-length encoding where small numbers take one byte and only large
+  ones take more — so a field holding `5` costs a byte, not eight.
+- The schema enables **forward/backward compatibility**: unknown tags are skipped, and new optional
+  fields are ignored by old readers — the contract that lets services evolve independently.
+
+**ASN.1** deserves a special mention: its **DER** (Distinguished Encoding Rules) give a *canonical*
+byte representation, which is why it underpins **X.509 certificates** and much of the crypto/PKI world
+(see [TLS](../../transport/tls/)) — signatures require everyone to encode the same bytes identically.
+
+<Callout variant="warning" title="Endianness and the cost of being explicit">
+Multi-byte integers can be **big-endian** (most-significant byte first — "network byte order," the
+internet convention) or **little-endian** (x86/ARM in memory). A serializer must pick one and convert,
+or two hosts will read each other's numbers byte-reversed. This is exactly the kind of representation
+detail the Presentation layer exists to normalize — text formats sidestep it (digits are digits), binary
+formats must declare it.
+</Callout>
+
+## Choosing a format
+
+| Need | Reach for |
+| --- | --- |
+| Public web API, debuggability | **JSON** |
+| Documents, mixed content, namespaces | **XML** |
+| High-throughput internal RPC, schema evolution | **Protocol Buffers** (gRPC), **Thrift** |
+| Compact, schemaless, drop-in for JSON | **MessagePack**, **CBOR** |
+| Big-data records with embedded schema | **Avro**, **Parquet** |
+| Canonical, signable encoding (certs, crypto) | **ASN.1 DER** |
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms rooted in serialization">
+- **Numbers reversed or garbage on one platform** — an endianness mismatch in a hand-rolled binary
+  format; use network byte order or a format that declares it.
+- **Floating-point values drift / a big integer truncates in JSON** — JSON numbers are doubles, so
+  64-bit IDs lose precision; send them as strings.
+- **Old client breaks when the server adds a field** — a non-extensible format or reused field tags;
+  schema formats avoid this by skipping unknown tags and never reusing numbers.
+- **Deserialization remote-code-execution** — language-native serializers (Java/Python pickle) that
+  instantiate arbitrary types from untrusted bytes; use data-only formats for untrusted input.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why are most binary serialization formats structured as Type–Length–Value (TLV)?",
+      options: [
+        "It encrypts the data",
+        "It is self-delimiting and extensible: a parser can skip a field it doesn't understand by its length, so new fields don't break old readers",
+        "It makes the data human-readable",
+      ],
+      answer: 1,
+      explanation: "TLV tags each field with a type and length, so a decoder can jump over unknown fields and still parse the rest. That self-description is what makes binary formats both compact and forward/backward compatible.",
+    },
+    {
+      q: "Why does Protocol Buffers identify fields by numeric tags instead of names, and use varints for integers?",
+      options: [
+        "To make the output human-readable",
+        "Numeric tags keep field names off the wire and let fields reorder/evolve; varints make small integers cost one byte instead of a fixed width",
+        "To encrypt each field",
+      ],
+      answer: 1,
+      explanation: "Tags replace repeated field-name text and enable schema evolution (skip unknown tags, add optional fields). Varints spend bytes proportional to a number's magnitude, so common small values stay tiny — both shrink the encoding versus JSON.",
+    },
+    {
+      q: "Why is ASN.1 DER, with its canonical byte encoding, used for X.509 certificates?",
+      options: [
+        "It is the smallest possible format",
+        "Digital signatures require everyone to encode the same data into exactly the same bytes; DER's canonical rules guarantee that",
+        "It is human-readable",
+      ],
+      answer: 1,
+      explanation: "A signature is computed over bytes, so signer and verifier must produce identical bytes for the same structure. DER's distinguished (canonical) encoding removes representation ambiguity, which is essential for certificates and signed crypto objects.",
+    },
+  ]}
+/>

@@ -1,0 +1,164 @@
+export const sources = [
+  { label: "RFC 9293 — Transmission Control Protocol (TCP)", href: "https://www.rfc-editor.org/rfc/rfc9293.html" },
+  { label: "RFC 6298 — Computing TCP's Retransmission Timer", href: "https://www.rfc-editor.org/rfc/rfc6298.html" },
+  { label: "RFC 2018 — TCP Selective Acknowledgment (SACK)", href: "https://www.rfc-editor.org/rfc/rfc2018.html" },
+  { label: "RFC 7323 — TCP Extensions for High Performance (window scaling, timestamps)", href: "https://www.rfc-editor.org/rfc/rfc7323.html" },
+  { label: "RFC 896 / 1122 — Nagle's algorithm & host requirements", href: "https://www.rfc-editor.org/rfc/rfc896.html" },
+];
+
+## What TCP guarantees, and how
+
+The [Transport overview](../../transport/) introduces TCP's contract: a **reliable, ordered byte
+stream** over IP's unreliable packets. That guarantee is assembled from four mechanisms working
+together — **sequence numbers** (order + dedup), **acknowledgments + retransmission** (reliability),
+the **sliding window** (flow control), and **congestion control** (network protection, covered on its
+[own page](../congestion-control/)). This page is the machinery behind the contract.
+
+## The connection lifecycle
+
+TCP is connection-oriented: a three-way handshake synchronizes initial sequence numbers before any
+data, and a four-way exchange tears each half of the stream down independently.
+
+<TcpStateMachine />
+
+<Callout variant="insight" title="TIME_WAIT: the most misunderstood state">
+The side that sends the final ACK enters **TIME_WAIT for 2×MSL** (Maximum Segment Lifetime, ~1–4 min)
+before fully closing. It exists for two reasons: (1) if that final ACK is lost, the peer will resend its
+FIN and TIME_WAIT can re-ACK it; (2) it lets any **stray, delayed segments** from this connection die
+out before the same 4-tuple could be reused, preventing them from corrupting a new connection. A busy
+client or proxy opening many short connections can accumulate thousands of TIME_WAIT sockets and exhaust
+ephemeral ports — tune with timestamps + `tw_reuse`, **not** by blindly lowering MSL.
+</Callout>
+
+## Reliability: sequence numbers, ACKs, and the retransmission timer
+
+Every byte has a **sequence number**; the receiver returns a **cumulative ACK** naming the next byte it
+expects. A sender retransmits when either signal fires:
+
+- **Triple duplicate ACK** → **fast retransmit** (immediate; see [congestion control](../congestion-control/)).
+- **Retransmission timeout (RTO)** expires with no ACK → resend and back off.
+
+Setting the RTO well is subtle — too short and you retransmit needlessly; too long and recovery stalls.
+TCP estimates it adaptively from measured round-trip times (<RFCRef n={6298} />):
+
+<Callout variant="note" title="Jacobson/Karels RTO, and Karn's correction">
+TCP tracks a smoothed RTT (**SRTT**) and its variation (**RTTVAR**), then sets
+`RTO = SRTT + 4 × RTTVAR` — widening the timer when latency is jittery. **Karn's algorithm** adds a
+crucial rule: **never sample RTT from a retransmitted segment**, because you can't tell whether the ACK
+matched the original or the retransmission (an ambiguity that would corrupt the estimate). On each
+timeout the RTO also **doubles** (exponential backoff) until an unambiguous sample resets it.
+</Callout>
+
+### SACK: fixing cumulative ACK's blind spot
+
+A pure cumulative ACK can only say "I have everything up to byte N." If segments 2 **and** 5 are lost
+out of 1–6, the sender learns only that 2 is missing and may needlessly resend 3–6. **Selective
+Acknowledgment** (<RFCRef n={2018} />) lets the receiver report the *non-contiguous blocks* it actually
+holds, so the sender retransmits **only** the true gaps.
+
+<SequenceWalk
+  title="SACK recovery from multiple losses"
+  actors={["Sender", "Receiver"]}
+  steps={[
+    { from: 0, to: 1, label: "segments 1,2,3,4,5,6 (2 and 5 are lost en route)", note: "The sender transmits a burst of six segments, but segments 2 and 5 never arrive. The receiver ends up holding 1, 3, 4, and 6 — two separate gaps in the byte stream.", accent: "warn" },
+    { from: 1, to: 0, label: "ACK 2, SACK {3-4, 6} — 'I have 1, plus 3–4 and 6'", dashed: true, note: "The cumulative ACK can only advance to byte 2 (the first gap), but the SACK option reports the non-contiguous blocks the receiver actually holds, so the sender can see both holes precisely.", accent: "good" },
+    { from: 0, to: 1, label: "retransmit ONLY 2 and 5 (the real gaps)", note: "Armed with the SACK blocks, the sender resends exactly the two missing segments instead of blindly retransmitting everything after the first gap, saving bandwidth and time." },
+    { from: 1, to: 0, label: "ACK 7 — stream now contiguous", dashed: true, note: "With 2 and 5 filled in, the receiver's buffer is now contiguous through byte 6, so it cumulatively ACKs 7 to confirm the whole window is delivered.", accent: "good" },
+  ]}
+  caption="SACK turns 'everything after the first gap' into 'exactly these gaps', avoiding wasteful retransmission of data the receiver already has."
+/>
+
+## Flow control deep dive
+
+The receiver advertises a **window** — how many more bytes it can buffer — and the sender keeps at most
+that much unacknowledged data in flight (a **sliding window**). Two refinements matter at scale:
+
+<SlidingWindow />
+
+- **Window scaling** (<RFCRef n={7323} />) — the header's window field is only 16 bits (max 64 KB), far
+  too small for a high-bandwidth, long-RTT path. A handshake-time **scale option** left-shifts the
+  window up to 1 GB, so the pipe can stay full. Negotiated only in the SYNs — it can't be added later.
+- **Zero-window + persist timer** — when the receiver's buffer fills it advertises a window of 0,
+  pausing the sender. To avoid deadlock if the re-opening "window update" is lost, the sender sends
+  periodic **zero-window probes** until the window reopens.
+
+<Callout variant="warning" title="Nagle vs. delayed-ACK: the 40 ms stall">
+**Nagle's algorithm** (<RFCRef n={896} />) withholds a small segment until prior data is ACKed, coalescing
+tiny writes to fight the **small-packet (tinygram) problem**. **Delayed ACK** withholds an ACK briefly (~40–200 ms),
+hoping to piggyback it on a reply. Together they can **deadlock**: the sender waits for an ACK before
+sending its small segment, while the receiver delays that ACK waiting for data — a classic latency
+spike in request/response protocols. Interactive apps set **`TCP_NODELAY`** to disable Nagle.
+</Callout>
+
+## MSS and path MTU
+
+The **Maximum Segment Size** is the largest payload a segment carries; each side advertises its MSS in
+the SYN (typically link MTU − 40 for IPv4/TCP headers). If a smaller MTU lurks mid-path, **Path MTU
+Discovery** finds it — but if a firewall blocks the ICMP "fragmentation needed" messages PMTUD relies
+on, you get a **PMTU black hole**: the handshake completes, small requests work, but large transfers
+hang. **MSS clamping** at a tunnel boundary is the common fix.
+
+## Failure modes & troubleshooting
+
+<Callout variant="warning" title="Symptoms and the field behind them">
+- **Connection hangs on large transfers, small ones fine** — a PMTU black hole (ICMP filtered); clamp
+  MSS or fix PMTUD.
+- **Throughput capped far below link rate** — window scaling disabled or a small receive buffer on a
+  high-BDP path; or persistent loss (see [congestion control](../congestion-control/)).
+- **Periodic ~40 ms latency in a request/response app** — the Nagle/delayed-ACK interaction; set
+  `TCP_NODELAY`.
+- **Ephemeral port exhaustion on a proxy** — TIME_WAIT pileup from many short connections; enable
+  timestamps + reuse rather than slashing MSL.
+- **Connection resets (RST)** — peer refused/aborted, or a middlebox injected a RST; distinguish from
+  silent firewall drops.
+</Callout>
+
+## Security considerations
+
+<Callout variant="security" title="Attack surface of the TCP state machine">
+- **SYN flood** — half-open connections exhaust the backlog; **SYN cookies** encode the connection
+  state in the sequence number so no server state is held until the handshake completes.
+- **RST / sequence-number injection** — forging a RST or data with a guessed sequence number to abort
+  or hijack a session; mitigated by randomized initial sequence numbers and, decisively, by TLS above.
+- **TIME_WAIT assassination** — a crafted RST prematurely clears TIME_WAIT, risking stale-segment
+  corruption; TCP timestamps (PAWS) defend against old segments.
+- **Off-path blind attacks** — the 4-tuple plus random ports and ISNs raise the guessing bar; on-path
+  attackers still need encryption above to be stopped.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why does Karn's algorithm forbid sampling RTT from a retransmitted segment?",
+      options: [
+        "Retransmitted segments travel a different path",
+        "You cannot tell whether the ACK acknowledges the original or the retransmission, so the RTT sample would be ambiguous",
+        "Retransmissions have no sequence number",
+      ],
+      answer: 1,
+      explanation: "If a segment was sent twice, an incoming ACK could be for either copy. Measuring RTT from it would feed a meaningless value into SRTT/RTTVAR, so Karn's rule excludes retransmitted segments from RTT estimation.",
+    },
+    {
+      q: "Segments 2 and 5 are lost out of 1–6. What does SACK let the sender do that plain cumulative ACK does not?",
+      options: [
+        "Retransmit the entire window from segment 2 onward",
+        "Retransmit only segments 2 and 5 — the receiver reports the blocks it already holds",
+        "Skip the lost segments entirely",
+      ],
+      answer: 1,
+      explanation: "A cumulative ACK only reveals the first gap. SACK reports the non-contiguous blocks the receiver has (3–4 and 6), so the sender resends exactly the missing 2 and 5 instead of everything after the first hole.",
+    },
+    {
+      q: "A bulk transfer over a 1 Gbps, 100 ms-RTT link is stuck near 5 Mbps. The most likely cause?",
+      options: [
+        "Window scaling is off, so the window can't exceed 64 KB on a high-BDP path",
+        "The MSS is too large",
+        "TIME_WAIT is exhausting ports",
+      ],
+      answer: 0,
+      explanation: "Throughput ≈ window/RTT. Without window scaling the window caps at 64 KB; over a 100 ms RTT that's ~5 Mbps regardless of the 1 Gbps link. Scaling (negotiated in the SYNs) lets the window grow to the bandwidth-delay product.",
+    },
+  ]}
+/>
