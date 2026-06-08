@@ -35,13 +35,14 @@ AEAD fuses encryption and integrity into one operation, which is why TLS 1.3 rem
 The handshake authenticates the peer and agrees on shared keys. **TLS 1.3 cut it to one round trip** and
 made **forward secrecy mandatory** — a redesign worth understanding against 1.2.
 
-<SequenceDiagram
+<SequenceWalk
+  title="TLS 1.3 handshake (1-RTT)"
   actors={["Client", "Server"]}
   steps={[
-    { from: 0, to: 1, label: "ClientHello: versions, cipher suites, key_share (ephemeral DH), SNI, ALPN" },
-    { from: 1, to: 0, label: "ServerHello: chosen suite + key_share → both derive the shared secret", dashed: true },
-    { from: 1, to: 0, label: "{EncryptedExtensions, Certificate, CertificateVerify, Finished} — encrypted", dashed: true },
-    { from: 0, to: 1, label: "Finished — handshake done; application data flows (1-RTT)" },
+    { from: 0, to: 1, label: "ClientHello + key_share", note: "The client offers its versions/cipher suites AND — the 1.3 trick — already includes its ephemeral (EC)DHE key share, plus SNI and ALPN." },
+    { from: 1, to: 0, label: "ServerHello + key_share", accent: "good", dashed: true, note: "The server picks the suite and sends its own key share. Both sides can now derive the shared secret — so everything from here on is encrypted." },
+    { from: 1, to: 0, label: "{Cert, CertVerify, Finished}", accent: "good", dashed: true, note: "Encrypted: the server's certificate, a signature proving it owns the key, and Finished. The certificate is no longer sent in the clear (unlike 1.2)." },
+    { from: 0, to: 1, label: "Finished → app data", accent: "good", note: "The client verifies the certificate and sends Finished. After one round trip the secure channel is up and application data flows." },
   ]}
   caption="TLS 1.3: the client sends its key share in the very first message, so after one round trip both sides hold session keys. Everything after ServerHello — including the server's certificate — is already encrypted."
 />

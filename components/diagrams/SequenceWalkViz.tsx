@@ -77,7 +77,7 @@ function Diagram({
               />
               <text
                 x={x}
-                y={24}
+                y={a.sub ? 24 : 31}
                 textAnchor="middle"
                 fontSize={12}
                 fontWeight={700}
@@ -85,16 +85,18 @@ function Diagram({
               >
                 {a.label}
               </text>
-              <text
-                x={x}
-                y={38}
-                textAnchor="middle"
-                fontSize={9}
-                fill="currentColor"
-                fillOpacity={0.6}
-              >
-                {a.sub}
-              </text>
+              {a.sub ? (
+                <text
+                  x={x}
+                  y={38}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="currentColor"
+                  fillOpacity={0.6}
+                >
+                  {a.sub}
+                </text>
+              ) : null}
               <line
                 x1={x}
                 y1={HEADER_H}

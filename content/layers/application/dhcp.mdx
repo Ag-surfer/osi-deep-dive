@@ -17,13 +17,14 @@ egg twist — the client needs to talk to a server before it has an IP — solve
 DHCP configures a host in four messages, mnemonically **DORA**. Because the client has no address yet, it
 sends from `0.0.0.0` to the broadcast address `255.255.255.255`:
 
-<SequenceDiagram
+<SequenceWalk
+  title="DHCP — the DORA exchange"
   actors={["Client (0.0.0.0)", "DHCP Server"]}
   steps={[
-    { from: 0, to: 1, label: "DHCPDISCOVER — broadcast: 'who can configure me?'" },
-    { from: 1, to: 0, label: "DHCPOFFER — 'here's 192.0.2.50, 8h lease, gateway, DNS'", dashed: true },
-    { from: 0, to: 1, label: "DHCPREQUEST — broadcast: 'I'll take 192.0.2.50'" },
-    { from: 1, to: 0, label: "DHCPACK — confirmed: IP + mask + gateway + DNS + options", dashed: true },
+    { from: 0, to: 1, label: "DISCOVER (broadcast)", note: "With no IP yet, the client broadcasts from 0.0.0.0 to 255.255.255.255: 'who can configure me?'" },
+    { from: 1, to: 0, label: "OFFER", accent: "good", dashed: true, note: "A server offers an address (192.0.2.50), a lease time, and the gateway/DNS — reserving that address for now." },
+    { from: 0, to: 1, label: "REQUEST (broadcast)", note: "The client broadcasts which offer it accepts — so any OTHER servers that offered learn theirs was declined and free the address back to the pool." },
+    { from: 1, to: 0, label: "ACK", accent: "good", dashed: true, note: "The chosen server confirms the lease and sends everything: IP, subnet mask, default gateway, DNS servers, and options. The client is now on the network." },
   ]}
   caption="Discover, Offer, Request, Acknowledge. The Request is broadcast (not unicast) so that any other servers that made an offer see it was declined and return their addresses to the pool."
 />
