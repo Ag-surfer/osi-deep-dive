@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LayerStack } from "@/components/LayerStack";
 import { EncapsulationVisualizer } from "@/components/EncapsulationVisualizer";
 import { OsiTcpIpMap } from "@/components/OsiTcpIpMap";
-import { OsiStackArt } from "@/components/diagrams/OsiStackArt";
+import { OsiStackHero } from "@/components/diagrams/OsiStackHero";
 import { Annotate } from "@/components/content/Annotate";
 import { Reveal } from "@/components/Reveal";
 
@@ -47,7 +47,7 @@ export default function Home() {
           </div>
         </div>
         <div className="hidden lg:block">
-          <OsiStackArt />
+          <OsiStackHero />
         </div>
       </section>
 
