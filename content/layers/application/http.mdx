@@ -42,13 +42,14 @@ The methods and headers barely changed; what changed is how requests are multipl
 slow response **blocks the ones behind it** (head-of-line blocking), so browsers open ~6 parallel
 connections per origin as a workaround.
 
-<SequenceDiagram
+<SequenceWalk
+  title="HTTP/1.1 head-of-line blocking"
   actors={["Browser", "Server"]}
   steps={[
-    { from: 0, to: 1, label: "GET /index.html" },
-    { from: 1, to: 0, label: "200 OK (must finish before the next request)", dashed: true },
-    { from: 0, to: 1, label: "GET /style.css (waited its turn)" },
-    { from: 1, to: 0, label: "200 OK", dashed: true },
+    { from: 0, to: 1, label: "GET /index.html", note: "The browser sends a single request and must wait for its full response before reusing the connection for anything else." },
+    { from: 1, to: 0, label: "200 OK (must finish before the next request)", dashed: true, accent: "good", note: "The response streams back in order; until the last byte arrives, the connection is occupied and the next request cannot start." },
+    { from: 0, to: 1, label: "GET /style.css (waited its turn)", note: "Only now — after the first response completed — can the second request go out on this connection." },
+    { from: 1, to: 0, label: "200 OK", dashed: true, accent: "good", note: "Each exchange is strictly serial, so one slow response delays everything queued behind it. Browsers open ~6 connections per origin to work around this." },
   ]}
   caption="HTTP/1.1: one outstanding request per connection. A slow response blocks everything queued behind it — application-level head-of-line blocking."
 />
@@ -57,11 +58,12 @@ connections per origin as a workaround.
 (HPACK) and server push. It fixes HTTP-level blocking — but because it rides one TCP stream, a single
 lost packet still stalls *all* streams ([TCP-level HoL blocking](../../transport/quic/)).
 
-<SequenceDiagram
+<SequenceWalk
+  title="HTTP/2 stream multiplexing"
   actors={["Browser", "Server"]}
   steps={[
-    { from: 0, to: 1, label: "GET /index.html, /style.css, /app.js — interleaved streams" },
-    { from: 1, to: 0, label: "responses interleaved on one connection (HPACK-compressed headers)", dashed: true },
+    { from: 0, to: 1, label: "GET /index.html, /style.css, /app.js — interleaved streams", note: "All three requests go out concurrently as independent streams over a single TCP connection, each with its own stream ID, so none has to wait for the others." },
+    { from: 1, to: 0, label: "responses interleaved on one connection (HPACK-compressed headers)", dashed: true, accent: "good", note: "Responses are framed and interleaved on the same connection with HPACK-compressed headers. This ends HTTP-level blocking, but all streams still ride one ordered TCP byte stream — so a single lost packet stalls them all." },
   ]}
   caption="HTTP/2: many streams share one connection, so requests no longer block each other at the HTTP layer — but they still share one TCP byte stream."
 />

@@ -44,7 +44,10 @@ function Diagram({
   headerColor: string;
 }) {
   const n = actors.length;
-  const width = 2 * PAD + (n - 1) * GAP;
+  // Self-message labels are drawn to the right of a self-loop, so reserve extra
+  // horizontal room when any step is a self-message to keep them from clipping.
+  const hasSelf = steps.some((s) => s.from === s.to);
+  const width = 2 * PAD + (n - 1) * GAP + (hasSelf ? 210 : 0);
   const xOf = (id: string) => {
     const i = actors.findIndex((a) => a.id === id);
     return PAD + i * GAP;
@@ -117,8 +120,37 @@ function Diagram({
           const x2 = xOf(s.to);
           const current = i === stepIndex;
           const color = accentColor(s.accent);
-          const dir = x2 > x1 ? 1 : -1;
           const sw = current ? 2.4 : 1.5;
+
+          // Self-message (from === to): draw a small loop on the actor's lifeline.
+          if (s.from === s.to) {
+            return (
+              <g key={i} opacity={current ? 1 : 0.4}>
+                <path
+                  d={`M ${x1} ${y - 7} h 18 v 14 h -18`}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={sw}
+                  strokeDasharray={s.dashed ? "6 3" : undefined}
+                />
+                <line x1={x1} y1={y + 7} x2={x1 + 7} y2={y + 3} stroke={color} strokeWidth={sw} />
+                <line x1={x1} y1={y + 7} x2={x1 + 7} y2={y + 11} stroke={color} strokeWidth={sw} />
+                <text
+                  x={x1 + 26}
+                  y={y + 4}
+                  textAnchor="start"
+                  fontSize={11}
+                  fontFamily="var(--font-mono)"
+                  fontWeight={current ? 700 : 400}
+                  fill={color}
+                >
+                  {s.label}
+                </text>
+              </g>
+            );
+          }
+
+          const dir = x2 > x1 ? 1 : -1;
           return (
             <g key={i} opacity={current ? 1 : 0.4}>
               <line

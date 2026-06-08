@@ -28,13 +28,14 @@ ordered byte stream, so **one lost segment stalls every multiplexed request behi
 segment is retransmitted. QUIC carries many **independent streams** within a connection, each with its
 own ordering. A loss on stream 3 holds up only stream 3; streams 1, 2, and 4 keep flowing.
 
-<SequenceDiagram
+<SequenceWalk
+  title="Head-of-line blocking: TCP vs QUIC"
   actors={["HTTP/2 over TCP", "HTTP/3 over QUIC"]}
   steps={[
-    { from: 0, to: 0, label: "3 requests multiplexed on ONE ordered byte stream" },
-    { from: 0, to: 0, label: "one segment lost → ALL 3 stall until it is retransmitted (HoL block)" },
-    { from: 1, to: 1, label: "3 requests on 3 independent QUIC streams" },
-    { from: 1, to: 1, label: "loss on stream 2 → only stream 2 waits; 1 and 3 deliver", dashed: true },
+    { from: 0, to: 0, label: "3 requests on 1 ordered stream", note: "HTTP/2 puts all concurrent requests into a single TCP connection, which TCP treats as one strictly ordered byte stream." },
+    { from: 0, to: 0, label: "1 segment lost → ALL stall (HoL)", accent: "warn", note: "Because TCP must deliver bytes in order, a single missing segment blocks delivery of every request queued behind it, even ones whose data already arrived." },
+    { from: 1, to: 1, label: "3 requests on 3 independent streams", note: "QUIC carries each request on its own stream with independent ordering, so the streams are decoupled at the transport layer." },
+    { from: 1, to: 1, label: "loss on stream 2 → only it waits", dashed: true, accent: "good", note: "A loss is confined to the stream that lost data; the other streams continue delivering without waiting for the retransmission." },
   ]}
   caption="Transport-level head-of-line blocking is intrinsic to multiplexing over a single TCP stream. QUIC's per-stream ordering confines a loss to the one stream that lost data."
 />
@@ -46,12 +47,13 @@ and cryptographic handshakes** (TLS 1.3 is built directly into QUIC, <RFCRef n={
 connection — transport parameters *and* session keys — is established in **one round trip**, or **zero**
 for a returning client using a PSK.
 
-<SequenceDiagram
+<SequenceWalk
+  title="QUIC merged transport + crypto handshake"
   actors={["Client", "Server"]}
   steps={[
-    { from: 0, to: 1, label: "Initial: ClientHello + transport parameters (one flight)" },
-    { from: 1, to: 0, label: "ServerHello + cert + transport params → keys ready (1-RTT)", dashed: true },
-    { from: 0, to: 1, label: "Encrypted application data — or 0-RTT data in the very first flight on resume" },
+    { from: 0, to: 1, label: "Initial: ClientHello + transport parameters (one flight)", note: "The client's first flight carries the TLS 1.3 ClientHello alongside QUIC transport parameters, fusing connection setup and key agreement into one exchange." },
+    { from: 1, to: 0, label: "ServerHello + cert + transport params → keys ready (1-RTT)", dashed: true, accent: "good", note: "The server replies with its ServerHello, certificate, and transport parameters; after this single round trip both sides can derive 1-RTT keys and the connection is established." },
+    { from: 0, to: 1, label: "Encrypted application data — or 0-RTT data in the very first flight on resume", note: "Application data now flows fully encrypted; a returning client with a cached PSK can even send 0-RTT data in its very first flight, with no round trips of setup delay." },
   ]}
   caption="There is no separate TCP handshake to wait through: QUIC carries the TLS 1.3 handshake in its first packets, so transport setup and key agreement complete together."
 />

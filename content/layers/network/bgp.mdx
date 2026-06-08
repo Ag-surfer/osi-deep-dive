@@ -49,15 +49,16 @@ BGP runs over **TCP port 179** — it inherits TCP's reliability, ordering, and 
 reinventing them. A session walks a finite state machine and, once **Established**, exchanges routes
 incrementally (only changes thereafter), kept alive by KEEPALIVEs within the negotiated **hold time**.
 
-<SequenceDiagram
+<SequenceWalk
+  title="BGP session establishment (FSM)"
   actors={["Router A", "Router B"]}
   steps={[
-    { from: 0, to: 1, label: "TCP 179 three-way handshake — Connect → OpenSent" },
-    { from: 0, to: 1, label: "OPEN: my ASN, hold time, Router ID, capabilities" },
-    { from: 1, to: 0, label: "OPEN + KEEPALIVE — parameters agree → OpenConfirm", dashed: true },
-    { from: 0, to: 1, label: "KEEPALIVE — session Established" },
-    { from: 0, to: 1, label: "UPDATE: NLRI (prefixes) + path attributes" },
-    { from: 1, to: 0, label: "UPDATE / periodic KEEPALIVE (within hold time)", dashed: true },
+    { from: 0, to: 1, label: "TCP 179 three-way handshake — Connect → OpenSent", note: "BGP rides on a normal TCP connection to port 179, so SYN/SYN-ACK/ACK must complete before any BGP message flows. Once the socket is up the FSM moves from Connect to OpenSent." },
+    { from: 0, to: 1, label: "OPEN: my ASN, hold time, Router ID, capabilities", note: "The first BGP message announces who I am: my AS number, proposed hold time, 32-bit Router ID, and optional capabilities (e.g. 4-byte ASN, MP-BGP, graceful restart)." },
+    { from: 1, to: 0, label: "OPEN + KEEPALIVE — parameters agree → OpenConfirm", note: "The peer replies with its own OPEN; if the parameters are mutually acceptable each side sends a KEEPALIVE to confirm, advancing the FSM to OpenConfirm.", accent: "good", dashed: true },
+    { from: 0, to: 1, label: "KEEPALIVE — session Established", note: "A final KEEPALIVE exchange transitions both peers to Established — the only state in which UPDATE messages are exchanged.", accent: "good" },
+    { from: 0, to: 1, label: "UPDATE: NLRI (prefixes) + path attributes", note: "Now reachability is advertised: each UPDATE carries NLRI (the prefixes) plus the path attributes (AS_PATH, NEXT_HOP, etc.) that policy and best-path selection act on." },
+    { from: 1, to: 0, label: "UPDATE / periodic KEEPALIVE (within hold time)", note: "After the initial full table, BGP is incremental — only changes are sent. KEEPALIVEs (typically every 1/3 of hold time) prove liveness; missing them past the hold time tears the session down.", accent: "good", dashed: true },
   ]}
   caption="Success path: Idle → Connect → OpenSent → OpenConfirm → Established. Active is the alternate/retry state the FSM falls back to when the TCP connection fails — which is exactly why a session stuck in Active means TCP 179 can't establish (ACL, no route to peer, wrong address)."
 />
@@ -135,12 +136,13 @@ To escape the full mesh:
 - **Confederations** split one AS into smaller **sub-ASes** that run eBGP-like sessions between
   themselves (intra-confederation), while appearing externally as a single ASN.
 
-<SequenceDiagram
+<SequenceWalk
+  title="Route reflector loop prevention"
   actors={["Client R1", "Route Reflector", "Client R2"]}
   steps={[
-    { from: 0, to: 1, label: "iBGP UPDATE: prefix learned via eBGP" },
-    { from: 1, to: 2, label: "Reflected to other clients (+ORIGINATOR_ID, +CLUSTER_LIST)", dashed: true },
-    { from: 2, to: 1, label: "R2 accepts: its cluster not in CLUSTER_LIST → no loop" },
+    { from: 0, to: 1, label: "iBGP UPDATE: prefix learned via eBGP", note: "An RR client advertises a prefix (here learned externally) to the route reflector over a normal iBGP session — the client peers only with the RR, not the full mesh." },
+    { from: 1, to: 2, label: "Reflected to other clients (+ORIGINATOR_ID, +CLUSTER_LIST)", note: "The RR breaks the iBGP split-horizon rule and re-advertises the route to its other clients, stamping ORIGINATOR_ID (the route's origin) and appending its cluster to CLUSTER_LIST.", dashed: true },
+    { from: 2, to: 1, label: "R2 accepts: its cluster not in CLUSTER_LIST → no loop", note: "R2 checks the CLUSTER_LIST; because its own cluster ID is absent the route can't have looped back, so it is accepted — this is exactly the safeguard that makes reflection safe.", accent: "good" },
   ]}
   caption="A route reflector legally re-advertises iBGP routes between clients, collapsing the n² full mesh to a hub-and-spoke while ORIGINATOR_ID/CLUSTER_LIST keep it loop-free."
 />

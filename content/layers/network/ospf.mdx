@@ -46,16 +46,17 @@ the single most common "why won't OSPF come up?" cause:
 Becoming neighbors (2-Way) is not the same as becoming **fully adjacent** (Full) — only fully adjacent
 routers exchange the complete LSDB. The bring-up walks a state machine:
 
-<SequenceDiagram
+<SequenceWalk
+  title="OSPF neighbor adjacency bring-up"
   actors={["Router A", "Router B"]}
   steps={[
-    { from: 0, to: 1, label: "Hello (neighbors: none) — Down → Init" },
-    { from: 1, to: 0, label: "Hello (neighbors: A) — B has seen A", dashed: true },
-    { from: 0, to: 1, label: "Hello (neighbors: B) — bidirectional → 2-Way" },
-    { from: 0, to: 1, label: "ExStart: negotiate master/slave via empty DBDs" },
-    { from: 1, to: 0, label: "Exchange: DBD packets summarize each LSDB", dashed: true },
-    { from: 0, to: 1, label: "Loading: LSR → LSU → LSAck fill the gaps" },
-    { from: 1, to: 0, label: "Full: LSDBs identical — adjacency complete", dashed: true },
+    { from: 0, to: 1, label: "Hello (neighbors: none) — Down → Init", note: "A multicasts a Hello to 224.0.0.5 listing the neighbors it has heard from — none yet. On receipt, B records A and moves its view of A from Down to Init.", accent: "neutral" },
+    { from: 1, to: 0, label: "Hello (neighbors: A) — B has seen A", dashed: true, note: "B replies with a Hello that names A in its neighbor list. Seeing its own Router ID echoed back tells A the link is bidirectional.", accent: "good" },
+    { from: 0, to: 1, label: "Hello (neighbors: B) — bidirectional → 2-Way", note: "A now lists B too, so both confirm two-way reachability and enter the 2-Way state. On a multi-access segment the DR/BDR election happens here.", accent: "good" },
+    { from: 0, to: 1, label: "ExStart: negotiate master/slave via empty DBDs", note: "The routers exchange empty Database Description packets to elect master and slave (higher Router ID wins) and pick a starting DBD sequence number.", accent: "neutral" },
+    { from: 1, to: 0, label: "Exchange: DBD packets summarize each LSDB", dashed: true, note: "Each side sends DBDs carrying only the headers of its LSAs, so the peer can spot which entries it is missing or holds in a staler version. An MTU mismatch stalls the adjacency right here.", accent: "neutral" },
+    { from: 0, to: 1, label: "Loading: LSR → LSU → LSAck fill the gaps", note: "For every missing or newer LSA, the router sends a Link-State Request; the peer answers with a Link-State Update, which is acknowledged by an LSAck. This fully synchronizes the two databases.", accent: "neutral" },
+    { from: 1, to: 0, label: "Full: LSDBs identical — adjacency complete", dashed: true, note: "Both LSDBs are now identical and the adjacency reaches Full. Only Full neighbors are usable in SPF and originate the Network LSA on a shared segment.", accent: "good" },
   ]}
   caption="Down → Init → 2-Way → ExStart → Exchange → Loading → Full. On multi-access links, DROthers stop at 2-Way with each other and only go Full with the DR/BDR."
 />

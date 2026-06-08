@@ -11,14 +11,15 @@ Email is a **store-and-forward** system: a message hops between independent serv
 responsibility and queuing it until the next accepts it, so delivery survives outages and the sender
 needn't wait for the recipient to be online. Three distinct jobs, on different protocols and ports:
 
-<SequenceDiagram
+<SequenceWalk
+  title="Email store-and-forward pipeline"
   actors={["Sender MUA", "Sender MTA", "Recipient MTA", "Recipient MUA"]}
   steps={[
-    { from: 0, to: 1, label: "Submit message (SMTP submission :587, authenticated + TLS)" },
-    { from: 1, to: 2, label: "MX lookup for the domain, then SMTP relay :25 (MAIL FROM / RCPT TO / DATA)", dashed: true },
-    { from: 2, to: 2, label: "queue, filter, deliver into the mailbox store" },
-    { from: 3, to: 2, label: "Retrieve (IMAP :993 sync, or POP :995 download)" },
-    { from: 2, to: 3, label: "messages", dashed: true },
+    { from: 0, to: 1, label: "Submit message (SMTP submission :587, authenticated + TLS)", note: "The mail client hands the composed message to its outgoing server over the SMTP submission port 587, which requires the user to authenticate and encrypts the session with TLS." },
+    { from: 1, to: 2, label: "MX lookup for the domain, then SMTP relay :25 (MAIL FROM / RCPT TO / DATA)", dashed: true, note: "The sender's server resolves the recipient domain's MX record in DNS, then relays the message to that server on port 25 using the classic MAIL FROM / RCPT TO / DATA conversation.", accent: "good" },
+    { from: 2, to: 2, label: "queue, filter, deliver into the mailbox store", note: "The receiving server accepts responsibility for the message, runs spam and policy filtering, then deposits it into the recipient's mailbox store — the 'store' half of store-and-forward.", accent: "good" },
+    { from: 3, to: 2, label: "Retrieve (IMAP :993 sync, or POP :995 download)", note: "The recipient's client connects to fetch mail, using IMAP on port 993 to keep server-side state in sync across devices, or the older POP on port 995 to download (and often delete)." },
+    { from: 2, to: 3, label: "messages", dashed: true, note: "The server returns the requested messages to the client, completing the journey from sender to reader.", accent: "good" },
   ]}
   caption="A mail user agent submits via SMTP; servers relay it between domains via SMTP after an MX lookup; the recipient retrieves it with IMAP or POP. Three protocols, one journey."
 />

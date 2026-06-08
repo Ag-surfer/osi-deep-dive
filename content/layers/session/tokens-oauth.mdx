@@ -35,17 +35,18 @@ revocable **access token** instead.
 
 The standard **authorization-code flow**:
 
-<SequenceDiagram
+<SequenceWalk
+  title="OAuth 2.0 authorization-code flow (with PKCE)"
   actors={["You (browser)", "Client app", "Auth server", "Resource server"]}
   steps={[
-    { from: 0, to: 1, label: "click 'Connect with Provider'" },
-    { from: 1, to: 2, label: "redirect: /authorize? client_id, scope, redirect_uri, PKCE" },
-    { from: 2, to: 0, label: "authenticate + consent to the requested scopes", dashed: true },
-    { from: 2, to: 1, label: "redirect back with a short-lived authorization code", dashed: true },
-    { from: 1, to: 2, label: "exchange code (+ client secret / PKCE) for tokens" },
-    { from: 2, to: 1, label: "access token (+ refresh token, + ID token)", dashed: true },
-    { from: 1, to: 3, label: "API call with Bearer access token" },
-    { from: 3, to: 1, label: "protected data (scoped to the grant)", dashed: true },
+    { from: 0, to: 1, label: "click 'Connect with Provider'", note: "The user initiates delegated access from inside the client app — no credentials are entered here; the app only needs to start the flow." },
+    { from: 1, to: 2, label: "redirect: /authorize? client_id, scope, redirect_uri, PKCE", note: "The client redirects the browser to the auth server's authorization endpoint, naming itself (client_id), the access it wants (scope), where to return (redirect_uri), and a PKCE challenge derived from a secret verifier." },
+    { from: 2, to: 0, label: "authenticate + consent to the requested scopes", dashed: true, accent: "good", note: "The user authenticates directly with the auth server and approves the requested scopes — the password is entered here, never seen by the client app." },
+    { from: 2, to: 1, label: "redirect back with a short-lived authorization code", dashed: true, accent: "good", note: "On consent, the auth server redirects back to the registered redirect_uri carrying a single-use code. The code is a stand-in for the token, not the token itself." },
+    { from: 1, to: 2, label: "exchange code (+ client secret / PKCE) for tokens", note: "Over a back channel, the client redeems the code, proving its identity with a client secret or the PKCE verifier that matches the earlier challenge." },
+    { from: 2, to: 1, label: "access token (+ refresh token, + ID token)", dashed: true, accent: "good", note: "The auth server returns a scoped access token, a refresh token for renewals, and (with OIDC) an ID token asserting who the user is." },
+    { from: 1, to: 3, label: "API call with Bearer access token", note: "The client calls the resource server, presenting the access token in the Authorization: Bearer header." },
+    { from: 3, to: 1, label: "protected data (scoped to the grant)", dashed: true, accent: "good", note: "The resource server validates the token and returns only the data permitted by the granted scopes — nothing broader." },
   ]}
   caption="The app never handles your password. It gets a one-time code via a browser redirect, exchanges it for a scoped access token, and uses that token at the resource server. PKCE binds the code to the client that started the flow."
 />

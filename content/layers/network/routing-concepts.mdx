@@ -47,15 +47,16 @@ A distance-vector router knows only `D(dest) = min over neighbors n of [ cost(n)
 never sees the topology — it trusts each neighbor's advertised distance. Cheap in CPU and memory, but
 "routing on rumor" creates the classic failure: the **count-to-infinity** problem.
 
-<SequenceDiagram
+<SequenceWalk
+  title="Distance-vector count-to-infinity"
   actors={["Net X", "Router A", "Router B"]}
   steps={[
-    { from: 0, to: 1, label: "X is directly connected (cost 0)" },
-    { from: 1, to: 2, label: "I can reach X at cost 1" },
-    { from: 0, to: 1, label: "✗ link to X fails", dashed: true },
-    { from: 2, to: 1, label: "But *I* can reach X at cost 2! (stale rumor)", dashed: true },
-    { from: 1, to: 2, label: "Then I reach X at cost 3… (via you)" },
-    { from: 2, to: 1, label: "…then 4… then 5… (counting to infinity)", dashed: true },
+    { from: 0, to: 1, label: "X is directly connected (cost 0)", note: "Router A is physically attached to network X, so it advertises a distance of 0 to reach X — the ground truth that every other router's distance is ultimately derived from.", accent: "good" },
+    { from: 1, to: 2, label: "I can reach X at cost 1", note: "A tells its neighbor B that it can reach X. B records X as reachable at cost 1 via A — but B has no map, so it only knows the advertised distance, not the path.", accent: "good" },
+    { from: 0, to: 1, label: "✗ link to X fails", dashed: true, note: "The link from A to X goes down. A now has no direct route to X and should converge on 'unreachable', but B hasn't heard the bad news yet.", accent: "warn" },
+    { from: 2, to: 1, label: "But *I* can reach X at cost 2! (stale rumor)", dashed: true, note: "Before A's withdrawal propagates, B advertises its own stale route to X (cost 2, actually via A). A trusts this rumor without realizing the path loops back through itself.", accent: "warn" },
+    { from: 1, to: 2, label: "Then I reach X at cost 3… (via you)", note: "A now believes it can reach X at cost 3 through B, and re-advertises that. Neither router can see that the route is circular — this is the cost of routing on rumor with no topology map.", accent: "warn" },
+    { from: 2, to: 1, label: "…then 4… then 5… (counting to infinity)", dashed: true, note: "Each exchange increments the metric by one hop, climbing slowly toward 'infinity'. RIP caps infinity at 16 precisely so this counting terminates quickly instead of looping forever.", accent: "warn" },
   ]}
   caption="When the link to X fails, A believes B's stale route back to itself. The bogus metric climbs one hop at a time until it hits 'infinity' (16 in RIP)."
 />

@@ -56,13 +56,14 @@ out of 1–6, the sender learns only that 2 is missing and may needlessly resend
 Acknowledgment** (<RFCRef n={2018} />) lets the receiver report the *non-contiguous blocks* it actually
 holds, so the sender retransmits **only** the true gaps.
 
-<SequenceDiagram
+<SequenceWalk
+  title="SACK recovery from multiple losses"
   actors={["Sender", "Receiver"]}
   steps={[
-    { from: 0, to: 1, label: "segments 1,2,3,4,5,6 (2 and 5 are lost en route)" },
-    { from: 1, to: 0, label: "ACK 2, SACK {3-4, 6} — 'I have 1, plus 3–4 and 6'", dashed: true },
-    { from: 0, to: 1, label: "retransmit ONLY 2 and 5 (the real gaps)" },
-    { from: 1, to: 0, label: "ACK 7 — stream now contiguous", dashed: true },
+    { from: 0, to: 1, label: "segments 1,2,3,4,5,6 (2 and 5 are lost en route)", note: "The sender transmits a burst of six segments, but segments 2 and 5 never arrive. The receiver ends up holding 1, 3, 4, and 6 — two separate gaps in the byte stream.", accent: "warn" },
+    { from: 1, to: 0, label: "ACK 2, SACK {3-4, 6} — 'I have 1, plus 3–4 and 6'", dashed: true, note: "The cumulative ACK can only advance to byte 2 (the first gap), but the SACK option reports the non-contiguous blocks the receiver actually holds, so the sender can see both holes precisely.", accent: "good" },
+    { from: 0, to: 1, label: "retransmit ONLY 2 and 5 (the real gaps)", note: "Armed with the SACK blocks, the sender resends exactly the two missing segments instead of blindly retransmitting everything after the first gap, saving bandwidth and time." },
+    { from: 1, to: 0, label: "ACK 7 — stream now contiguous", dashed: true, note: "With 2 and 5 filled in, the receiver's buffer is now contiguous through byte 6, so it cumulatively ACKs 7 to confirm the whole window is delivered.", accent: "good" },
   ]}
   caption="SACK turns 'everything after the first gap' into 'exactly these gaps', avoiding wasteful retransmission of data the receiver already has."
 />

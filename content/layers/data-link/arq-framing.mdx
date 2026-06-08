@@ -42,13 +42,14 @@ Send one frame, then wait for its ACK before sending the next. Correct and trivi
 **idle for a full round trip** between frames, so it wastes almost all the capacity of a fast or
 long-distance link.
 
-<SequenceDiagram
+<SequenceWalk
+  title="Stop-and-wait ARQ"
   actors={["Sender", "Receiver"]}
   steps={[
-    { from: 0, to: 1, label: "Frame 0" },
-    { from: 1, to: 0, label: "ACK 0", dashed: true },
-    { from: 0, to: 1, label: "Frame 1 (only now can it be sent)" },
-    { from: 1, to: 0, label: "ACK 1", dashed: true },
+    { from: 0, to: 1, label: "Frame 0", note: "The sender transmits frame 0 and then stops, refusing to send anything more until it hears back. Only one frame is ever in flight." },
+    { from: 1, to: 0, label: "ACK 0", dashed: true, accent: "good", note: "The receiver confirms frame 0 arrived intact. This ACK is what unblocks the sender — until it returns, the link sits idle for a full round trip." },
+    { from: 0, to: 1, label: "Frame 1 (only now can it be sent)", note: "With frame 0 acknowledged, the sender may finally release frame 1. Every frame costs one full round-trip of waiting." },
+    { from: 1, to: 0, label: "ACK 1", dashed: true, accent: "good", note: "Frame 1 is acknowledged and the cycle repeats. Throughput is capped at one frame per round trip regardless of how fast the link is." },
   ]}
   caption="One frame in flight at a time. On a high bandwidth-delay link the sender spends most of its time waiting, not transmitting."
 />
@@ -60,13 +61,14 @@ accepts frames **strictly in order** and sends **cumulative ACKs**. If a frame i
 **discards everything after it**, and the sender **goes back** and resends the lost frame and all that
 followed.
 
-<SequenceDiagram
+<SequenceWalk
+  title="Go-Back-N ARQ"
   actors={["Sender", "Receiver"]}
   steps={[
-    { from: 0, to: 1, label: "Frames 1, 2, 3, 4 sent back-to-back (window = 4)" },
-    { from: 1, to: 0, label: "Frame 2 lost → receiver discards 3, 4 (out of order); ACK 1 only", dashed: true },
-    { from: 0, to: 1, label: "Timeout → go back: retransmit 2, 3, 4" },
-    { from: 1, to: 0, label: "ACK 2, 3, 4 — back in order", dashed: true },
+    { from: 0, to: 1, label: "Frames 1, 2, 3, 4 sent back-to-back (window = 4)", note: "The window lets four unacknowledged frames fill the pipe at once, keeping the link busy rather than idle between frames." },
+    { from: 1, to: 0, label: "Frame 2 lost → receiver discards 3, 4 (out of order); ACK 1 only", dashed: true, accent: "warn", note: "Because frame 2 never arrived, the receiver rejects the in-order-only frames 3 and 4 and refuses to buffer them. Its cumulative ACK can only advance to 1." },
+    { from: 0, to: 1, label: "Timeout → go back: retransmit 2, 3, 4", note: "Seeing no progress past frame 1, the sender's timer expires and it 'goes back', resending the lost frame and everything after it — even frames the receiver already saw once." },
+    { from: 1, to: 0, label: "ACK 2, 3, 4 — back in order", dashed: true, accent: "good", note: "With the gap filled, the receiver accepts the now-in-order frames and the cumulative ACK jumps forward. Simple receiver, but a single loss wasted three retransmissions." },
   ]}
   caption="Go-Back-N keeps the pipe full but a single loss forces retransmission of every frame after it — simple receiver (no buffering), wasteful on lossy links."
 />
@@ -76,13 +78,14 @@ followed.
 The efficient sibling: the receiver **buffers** out-of-order frames and ACKs them individually, so the
 sender retransmits **only** the frames actually lost.
 
-<SequenceDiagram
+<SequenceWalk
+  title="Selective Repeat ARQ"
   actors={["Sender", "Receiver"]}
   steps={[
-    { from: 0, to: 1, label: "Frames 1, 2, 3, 4 sent (window = 4)" },
-    { from: 1, to: 0, label: "Frame 2 lost; 3, 4 buffered → ACK 1, ACK 3, ACK 4", dashed: true },
-    { from: 0, to: 1, label: "Retransmit ONLY frame 2" },
-    { from: 1, to: 0, label: "ACK 2 → deliver 2, 3, 4 in order from the buffer", dashed: true },
+    { from: 0, to: 1, label: "Frames 1, 2, 3, 4 sent (window = 4)", note: "As with Go-Back-N, a window of four frames fills the pipe — the difference is entirely in how the receiver handles a gap." },
+    { from: 1, to: 0, label: "Frame 2 lost; 3, 4 buffered → ACK 1, ACK 3, ACK 4", dashed: true, accent: "warn", note: "Frame 2 is lost, but the receiver buffers the later frames 3 and 4 instead of discarding them and ACKs each individually. The sender now knows exactly which frame is missing." },
+    { from: 0, to: 1, label: "Retransmit ONLY frame 2", note: "Armed with per-frame ACKs, the sender resends just the one lost frame — no wasted retransmission of 3 and 4." },
+    { from: 1, to: 0, label: "ACK 2 → deliver 2, 3, 4 in order from the buffer", dashed: true, accent: "good", note: "Frame 2 fills the gap, so the receiver releases 2, 3, and 4 to the upper layer in order from its buffer. Efficient, but it requires receiver buffering and a window no larger than half the sequence space." },
   ]}
   caption="Selective Repeat retransmits just the lost frame, at the cost of buffering at the receiver and a tighter sequence-number rule (window ≤ half the sequence space)."
 />
