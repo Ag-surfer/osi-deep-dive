@@ -3,13 +3,13 @@ import { ThemeToggle } from "./ThemeToggle";
 import { MobileNav } from "./MobileNav";
 
 const NAV = [
-  { href: "/", label: "Home" },
   { href: "/layers/physical/", label: "Layers" },
   { href: "/journey/", label: "Packet Journey" },
   { href: "/anatomy/", label: "Anatomy" },
   { href: "/glossary/", label: "Glossary" },
   { href: "/quiz/", label: "Quiz" },
   { href: "/interview/", label: "Interview" },
+  { href: "/troubleshoot/", label: "Troubleshoot" },
 ];
 
 export function SiteHeader() {

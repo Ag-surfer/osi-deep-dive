@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FIELDS, FRAME, LAYER_SPANS, fieldAt, type CaptureField } from "@/lib/capture";
+import { FRAMES, fieldAt, type CaptureField } from "@/lib/capture";
 import { LAYERS } from "@/lib/layers";
 
 const BYTES_PER_ROW = 16;
@@ -23,30 +23,70 @@ function printable(b: number): string {
 }
 
 /**
- * Interactive byte-level walkthrough of one real frame. Every byte is a
- * button; selecting one highlights its protocol field and explains it.
- * Keyboard-first by construction (a grid of real buttons).
+ * Interactive byte-level walkthrough of a real five-frame TCP conversation.
+ * Pick a frame, then click any byte to decode its protocol field. Real
+ * buttons throughout, so tap and keyboard work by construction.
  */
 export function PacketWalkthrough() {
+  const [frameIdx, setFrameIdx] = useState(0);
   const [selected, setSelected] = useState<CaptureField | null>(null);
+  const frame = FRAMES[frameIdx]!;
 
   const rows: number[][] = [];
-  for (let i = 0; i < FRAME.length; i += BYTES_PER_ROW) {
-    rows.push(FRAME.slice(i, i + BYTES_PER_ROW));
+  for (let i = 0; i < frame.bytes.length; i += BYTES_PER_ROW) {
+    rows.push(frame.bytes.slice(i, i + BYTES_PER_ROW));
   }
 
   const isSelected = (offset: number) =>
     selected !== null && offset >= selected.start && offset < selected.start + selected.length;
 
+  function pickFrame(idx: number) {
+    setFrameIdx(idx);
+    setSelected(null);
+  }
+
   return (
     <div>
+      {/* Frame tabs — the conversation in order */}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Frames in this conversation">
+        {FRAMES.map((f, i) => {
+          const active = i === frameIdx;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => pickFrame(i)}
+              className="rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors"
+              style={
+                active
+                  ? {
+                      backgroundColor: "var(--fg)",
+                      borderColor: "var(--fg)",
+                      color: "var(--bg)",
+                    }
+                  : { borderColor: "var(--border)", color: "var(--fg-muted)" }
+              }
+            >
+              <span className="font-mono">{i + 1}</span> · {f.label}{" "}
+              <span aria-hidden>{f.direction === "client → server" ? "→" : "←"}</span>
+              <span className="sr-only">({f.direction})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+        {frame.summary}
+      </p>
+
       {/* Layer legend / overview bar */}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Layers in this frame">
-        {LAYER_SPANS.map((s) => (
+      <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Layers in this frame">
+        {frame.layerSpans.map((s) => (
           <button
             key={s.label}
             type="button"
-            onClick={() => setSelected(fieldAt(s.start) ?? null)}
+            onClick={() => setSelected(fieldAt(frame, s.start) ?? null)}
             className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-semibold"
             style={{ borderColor: layerColor(s.layer) }}
           >
@@ -72,14 +112,14 @@ export function PacketWalkthrough() {
           {rows.map((row, ri) => {
             const base = ri * BYTES_PER_ROW;
             return (
-              <div key={ri} className="flex items-center gap-3">
+              <div key={`${frame.id}-${ri}`} className="flex items-center gap-3">
                 <span className="select-none" style={{ color: "var(--fg-muted)" }} aria-hidden>
                   {base.toString(16).padStart(4, "0")}
                 </span>
                 <span className="flex gap-1">
                   {row.map((b, bi) => {
                     const offset = base + bi;
-                    const field = fieldAt(offset)!;
+                    const field = fieldAt(frame, offset)!;
                     const sel = isSelected(offset);
                     return (
                       <button
@@ -133,7 +173,8 @@ export function PacketWalkthrough() {
               <span className="font-semibold">{selected.name}</span>
               <span className="font-mono text-xs" style={{ color: "var(--fg-muted)" }}>
                 bytes {selected.start}–{selected.start + selected.length - 1} ·{" "}
-                {FRAME.slice(selected.start, selected.start + selected.length)
+                {frame.bytes
+                  .slice(selected.start, selected.start + selected.length)
                   .map(hex)
                   .join(" ")}
               </span>
@@ -146,7 +187,8 @@ export function PacketWalkthrough() {
         ) : (
           <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
             Click any byte (or a layer above) to decode it. The colors mark which layer owns each
-            byte — watch the frame hand off from Ethernet to IP to TCP to readable HTTP.
+            byte — switch frames above to follow the whole conversation: handshake, request,
+            response, close.
           </p>
         )}
       </div>
@@ -154,10 +196,10 @@ export function PacketWalkthrough() {
       {/* Full field index */}
       <details className="mt-4">
         <summary className="cursor-pointer text-sm font-semibold">
-          All {FIELDS.length} fields, in order
+          All {frame.fields.length} fields of this frame, in order
         </summary>
         <ul className="mt-2 space-y-1">
-          {FIELDS.map((f) => (
+          {frame.fields.map((f) => (
             <li key={f.start}>
               <button
                 type="button"
