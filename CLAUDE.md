@@ -63,6 +63,11 @@ enforced in CI by `.github/workflows/lighthouse.yml` on every push/PR (fails on 
 - **`scripts/perf-server.mjs` caches gzipped responses from startup.** After a rebuild
   (`pnpm check`/`pnpm build`), restart the server before visual verification — a stale instance
   serves the previous build's HTML/JS and produces confusing "the fix didn't apply" screenshots.
+- **Don't embed build-time data in shared layout components.** Rendering the search index
+  into the header put ~17 KB gz into *every* page's HTML and dropped the homepage below the
+  Lighthouse perf budget (0.83 < 0.85 — the budget caught it). Pattern: emit a `force-static`
+  route handler (`app/<name>.json/route.ts`) and fetch lazily on first interaction;
+  `NEXT_PUBLIC_BASE_PATH` (already in next.config) handles the Pages base path.
 
 ## Dev-time MCP servers (`.mcp.json`)
 
