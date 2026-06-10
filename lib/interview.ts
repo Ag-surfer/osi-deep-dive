@@ -353,6 +353,120 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
     ],
     links: [{ label: "DNS, the lookup behind everything", href: "/layers/application/" }],
   },
+  {
+    id: "wifi-three-addresses",
+    layer: 2,
+    question: "Why does an 802.11 frame carry three MAC addresses when Ethernet needs two?",
+    answer:
+      "Because the access point is a relay, every Wi-Fi frame describes two hops at once. On the radio hop you need the transmitter and receiver (who is radiating, who should decode and ACK); but the frame is in transit between the wireless and wired worlds, so a third field carries the other end — the ultimate destination (station→AP) or the original source (AP→station). The ToDS/FromDS bits in Frame Control say which reading applies. Bonus points: a fourth address appears when both bits are set (AP-to-AP mesh/WDS), because then transmitter, receiver, source, and destination are four distinct machines.",
+    followUps: [
+      "What are Address 1/2/3 for a frame from a laptop to a wired server?",
+      "Why does Wi-Fi need link-layer ACKs and sequence numbers at all?",
+    ],
+    links: [
+      { label: "The 802.11 frame, field by field", href: "/wireless/" },
+      { label: "CSMA/CA and hidden terminals", href: "/layers/data-link/" },
+    ],
+  },
+  {
+    id: "gratuitous-arp",
+    layer: 2,
+    question: "What is a gratuitous ARP, and what is it (legitimately) for?",
+    answer:
+      "An unsolicited ARP message — typically a broadcast ARP request for your own IP address — announcing 'this IP maps to this MAC' to everyone. Legitimate uses are real: announcing yourself after boot or an IP change so neighbors' caches update, detecting duplicate addresses (if anyone answers your gratuitous ARP for your own IP, there's a conflict), and high-availability failover — when a standby router takes over a virtual IP, its gratuitous ARP instantly repoints every cache on the LAN. The same mechanism is ARP spoofing's tool of choice, which is the deeper lesson: ARP has no authentication, so the difference between failover and attack is intent.",
+    followUps: [
+      "How does VRRP/keepalived use this during failover?",
+      "How would you detect ARP spoofing on a network you operate?",
+    ],
+    links: [{ label: "ARP and its security story", href: "/layers/data-link/" }],
+  },
+  {
+    id: "anycast",
+    layer: 3,
+    question: "What is anycast, and how can one IP address exist in 200 cities at once?",
+    answer:
+      "Anycast is announcing the same IP prefix from many locations via BGP and letting ordinary route selection deliver each packet to the topologically nearest site. Nothing in IP requires an address to live in one place — routers just forward toward whichever announcement their best-path selection chose. It's how root DNS servers and CDN edges scale and absorb DDoS (the attack is diluted across every site). The classic follow-up trap: long-lived TCP connections can theoretically break if routing shifts mid-connection to a different site — in practice routes are stable enough, and CDNs engineer around it.",
+    followUps: [
+      "Why is anycast nearly perfect for DNS but trickier for long-lived TCP?",
+      "How does anycast help absorb DDoS attacks?",
+    ],
+    links: [
+      { label: "CDNs and anycast", href: "/modern/" },
+      { label: "How BGP picks paths", href: "/layers/network/" },
+    ],
+  },
+  {
+    id: "slaac-vs-dhcp",
+    layer: 3,
+    question: "How does an IPv6 host get an address without a DHCP server?",
+    answer:
+      "SLAAC — stateless address autoconfiguration. The router periodically multicasts Router Advertisements carrying the network prefix; the host appends a self-generated interface identifier, then verifies uniqueness by asking 'anyone already using this?' via Neighbor Solicitation (duplicate address detection). No server, no lease, no state held anywhere. The supporting cast is NDP (ICMPv6), which also replaces ARP for address resolution. DHCPv6 still exists for networks wanting central control and logging — and a flag in the Router Advertisement tells hosts which regime applies.",
+    followUps: [
+      "What replaced ARP in IPv6, and over what transport?",
+      "What's the rogue-RA attack and its defense?",
+    ],
+    links: [
+      { label: "NDP and SLAAC in depth", href: "/modern/" },
+      { label: "DHCP's DORA for contrast", href: "/layers/application/" },
+    ],
+  },
+  {
+    id: "bdp",
+    layer: 4,
+    question: "What is the bandwidth-delay product, and why does it govern throughput?",
+    answer:
+      "BDP = bandwidth × round-trip time: the amount of data that must be in flight, unacknowledged, to keep a path full — the 'capacity of the pipe' in bytes. TCP can only have one window of unacknowledged data outstanding, so throughput ≈ window / RTT regardless of link speed: a 64 KB window over 100 ms caps you near 5 Mb/s even on a 10 Gb/s path. That's why window scaling exists (the 16-bit window field can't express modern BDPs), why 'long fat networks' underperform with untuned stacks, and why BBR's whole design is pacing at measured bandwidth with about one BDP in flight.",
+    followUps: [
+      "Compute the BDP of a 1 Gb/s, 80 ms path — what window does it demand?",
+      "How does window scaling get negotiated?",
+    ],
+    links: [{ label: "Windows, BDP, and BBR", href: "/layers/transport/" }],
+  },
+  {
+    id: "tls13-handshake",
+    layer: 6,
+    question: "Walk me through the TLS 1.3 handshake.",
+    answer:
+      "One round trip. The ClientHello offers cipher suites and — the key 1.3 change — already includes a key share (an ephemeral Diffie-Hellman public value). The ServerHello picks the suite, returns its own key share, and from that moment both sides derive identical session keys; the server's certificate and signature follow, already encrypted, proving its identity. Client verifies the chain, sends Finished, and application data flows. Strong answers add: ephemeral keys give forward secrecy by default; resumption uses pre-shared keys from a prior session (0-RTT can even carry data in the first flight, accepting replay risk); and 1.3 deleted the legacy footguns — static-RSA key exchange, renegotiation, compression.",
+    followUps: [
+      "What does forward secrecy actually protect against?",
+      "Why is 0-RTT data replayable, and what should never be sent in it?",
+    ],
+    links: [
+      { label: "The handshake diagram", href: "/layers/presentation/" },
+      { label: "TLS session resumption and 0-RTT", href: "/layers/session/" },
+    ],
+  },
+  {
+    id: "vxlan-vs-vlan",
+    layer: 2,
+    question: "VLAN vs VXLAN — when does each make sense?",
+    answer:
+      "Both isolate Layer-2 domains; they differ in scale and substrate. A VLAN is a 4-byte tag on the Ethernet frame — 12 bits, so 4,094 usable segments — and it requires every switch on the path to carry the tagged frame: same physical fabric. VXLAN wraps the entire Ethernet frame in UDP and tunnels it over any IP network, with a 24-bit identifier (~16.7 million segments). VLANs are right for campus/office segmentation on hardware you control end to end; VXLAN is right when the segments must outnumber 4,094 (multi-tenant clouds) or span an IP-routed underlay (data centers, Kubernetes overlays) — Layer 2 semantics stretched over a Layer 3 world.",
+    followUps: [
+      "What's an underlay vs an overlay network?",
+      "Why did data centers move from stretched VLANs to VXLAN fabrics?",
+    ],
+    links: [
+      { label: "Overlay networks", href: "/modern/" },
+      { label: "VLANs and Spanning Tree", href: "/layers/data-link/" },
+    ],
+  },
+  {
+    id: "cdn-by-layer",
+    layer: 0,
+    question: "Describe what a CDN does, layer by layer.",
+    answer:
+      "A tour of the stack: at L7 it serves cached HTTP responses from edge locations and steers users via DNS; at L6 it terminates TLS at the edge (holding certificates close to users to cut handshake RTTs); at L4 it terminates TCP/QUIC near the user and often runs an optimized connection to the origin over its private backbone; at L3 it announces the same prefixes from every site (anycast) so routing itself delivers users to the nearest edge; and physically it's the speed of light being managed — content placed kilometers, not continents, from eyeballs. The punchline interviewers like: a CDN is the whole OSI model deployed as a business.",
+    followUps: [
+      "What's the difference between a cache hit at the edge and a request that goes to origin?",
+      "Why does TLS termination at the edge improve latency even for uncacheable content?",
+    ],
+    links: [
+      { label: "CDNs, anycast, and load balancers", href: "/modern/" },
+      { label: "Why latency dominates", href: "/layers/application/" },
+    ],
+  },
 ];
 
 /** Layer numbers (0–7) that have at least one question, in display order. */

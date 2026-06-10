@@ -15,6 +15,7 @@ const TOP = [
   { href: "/troubleshoot/", label: "Troubleshooting Method" },
   { href: "/models/", label: "OSI vs TCP/IP History" },
   { href: "/modern/", label: "The Modern Internet" },
+  { href: "/wireless/", label: "Wireless Deep Dive" },
   { href: "/cheat-sheet/", label: "Cheat Sheet" },
 ];
 

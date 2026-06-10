@@ -15,6 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/troubleshoot/",
     "/models/",
     "/modern/",
+    "/wireless/",
     "/cheat-sheet/",
     ...LAYERS.map((l) => `/layers/${l.slug}/`),
   ];
