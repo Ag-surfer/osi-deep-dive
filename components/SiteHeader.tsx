@@ -6,6 +6,7 @@ const NAV = [
   { href: "/", label: "Home" },
   { href: "/layers/physical/", label: "Layers" },
   { href: "/journey/", label: "Packet Journey" },
+  { href: "/anatomy/", label: "Anatomy" },
   { href: "/glossary/", label: "Glossary" },
   { href: "/quiz/", label: "Quiz" },
 ];
