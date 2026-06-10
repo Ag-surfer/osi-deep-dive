@@ -60,6 +60,9 @@ enforced in CI by `.github/workflows/lighthouse.yml` on every push/PR (fails on 
   the `_next/` asset dir.
 - **Visual verification:** Playwright MCP wasn't available mid-session; `scripts/shoot.mjs` (local
   Playwright) screenshots pages so changes can be eyeballed. `pnpm dev` then `node scripts/shoot.mjs`.
+- **`scripts/perf-server.mjs` caches gzipped responses from startup.** After a rebuild
+  (`pnpm check`/`pnpm build`), restart the server before visual verification — a stale instance
+  serves the previous build's HTML/JS and produces confusing "the fix didn't apply" screenshots.
 
 ## Dev-time MCP servers (`.mcp.json`)
 
