@@ -128,7 +128,7 @@ export function PacketWalkthrough() {
                         onClick={() => setSelected(field)}
                         aria-label={`Byte ${offset}: 0x${hex(b)} — ${field.name}`}
                         aria-pressed={sel}
-                        className="rounded px-0.5 transition-colors"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded transition-colors"
                         style={{
                           backgroundColor: sel
                             ? layerColor(field.layer)
