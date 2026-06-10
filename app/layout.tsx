@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-screen flex-col antialiased">
-        <a href="#main" className="skip-link">
+        <a href="#main" className="skip-link print:hidden">
           Skip to content
         </a>
         <SiteHeader />

@@ -12,7 +12,9 @@
         "http://localhost:9009/journey/",
         "http://localhost:9009/glossary/",
         "http://localhost:9009/quiz/",
-        "http://localhost:9009/anatomy/"
+        "http://localhost:9009/anatomy/",
+        "http://localhost:9009/interview/",
+        "http://localhost:9009/cheat-sheet/"
       ],
       "numberOfRuns": 1
     },

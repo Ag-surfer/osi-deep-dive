@@ -105,3 +105,15 @@ h4 {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Compress the cheat sheet to a single printed page. */
+@media print {
+  .cheat-sheet td,
+  .cheat-sheet th {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .cheat-sheet section {
+    break-inside: avoid;
+  }
+}

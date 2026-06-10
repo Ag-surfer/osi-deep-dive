@@ -9,12 +9,13 @@ const NAV = [
   { href: "/anatomy/", label: "Anatomy" },
   { href: "/glossary/", label: "Glossary" },
   { href: "/quiz/", label: "Quiz" },
+  { href: "/interview/", label: "Interview" },
 ];
 
 export function SiteHeader() {
   return (
     <header
-      className="sticky top-0 z-40 border-b backdrop-blur"
+      className="sticky top-0 z-40 border-b backdrop-blur print:hidden"
       style={{
         borderColor: "var(--border)",
         backgroundColor: "color-mix(in oklch, var(--bg) 85%, transparent)",
@@ -36,15 +37,13 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <a
-            href="https://en.wikipedia.org/wiki/OSI_model"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/cheat-sheet/"
             className="hidden text-sm sm:inline"
             style={{ color: "var(--fg-muted)" }}
           >
-            Reference
-          </a>
+            Cheat&nbsp;Sheet
+          </Link>
           <ThemeToggle />
           <MobileNav />
         </div>

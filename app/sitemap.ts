@@ -11,6 +11,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/anatomy/",
     "/glossary/",
     "/quiz/",
+    "/interview/",
+    "/cheat-sheet/",
     ...LAYERS.map((l) => `/layers/${l.slug}/`),
   ];
   return paths.map((path) => ({
