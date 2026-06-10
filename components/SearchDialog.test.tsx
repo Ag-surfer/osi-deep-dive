@@ -35,27 +35,51 @@ const RECORDS: SearchRecord[] = [
   },
 ];
 
-describe("SearchDialog", () => {
-  beforeEach(() => push.mockClear());
+function mockFetch() {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve(RECORDS),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
 
-  it("opens via the header button and searches", () => {
-    render(<SearchDialog records={RECORDS} />);
-    fireEvent.click(screen.getByRole("button", { name: /search the site/i }));
+async function openDialog() {
+  fireEvent.click(screen.getByRole("button", { name: /search the site/i }));
+  // Index fetch resolves on the microtask queue.
+  await screen.findByRole("combobox");
+  await vi.waitFor(() => expect(screen.queryByText(/Loading the index/)).not.toBeInTheDocument());
+}
+
+describe("SearchDialog", () => {
+  beforeEach(() => {
+    push.mockClear();
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches the index lazily on first open, then searches", async () => {
+    const fetchMock = mockFetch();
+    render(<SearchDialog />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await openDialog();
+    expect(fetchMock).toHaveBeenCalledWith("/search-index.json");
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "nat" } });
     expect(screen.getByText("NAT")).toBeInTheDocument();
     expect(screen.getByText(/workaround that ate/)).toBeInTheDocument();
     expect(screen.getByText("2 results")).toBeInTheDocument();
   });
 
-  it("opens with Cmd-K", () => {
-    render(<SearchDialog records={RECORDS} />);
+  it("opens with Cmd-K", async () => {
+    mockFetch();
+    render(<SearchDialog />);
     fireEvent.keyDown(document, { key: "k", metaKey: true });
-    expect(screen.getByRole("combobox")).toBeVisible();
+    expect(await screen.findByRole("combobox")).toBeVisible();
   });
 
-  it("navigates with arrow keys and Enter", () => {
-    render(<SearchDialog records={RECORDS} />);
-    fireEvent.click(screen.getByRole("button", { name: /search the site/i }));
+  it("navigates with arrow keys and Enter", async () => {
+    mockFetch();
+    render(<SearchDialog />);
+    await openDialog();
     const input = screen.getByRole("combobox");
     fireEvent.change(input, { target: { value: "nat" } });
     fireEvent.keyDown(input, { key: "ArrowDown" });
@@ -63,17 +87,19 @@ describe("SearchDialog", () => {
     expect(push).toHaveBeenCalledWith("/layers/network/#nat-the-workaround-that-ate-the-internet");
   });
 
-  it("clicking a result navigates", () => {
-    render(<SearchDialog records={RECORDS} />);
-    fireEvent.click(screen.getByRole("button", { name: /search the site/i }));
+  it("clicking a result navigates", async () => {
+    mockFetch();
+    render(<SearchDialog />);
+    await openDialog();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "transport" } });
     fireEvent.click(screen.getByText("Layer 4 — Transport"));
     expect(push).toHaveBeenCalledWith("/layers/transport/");
   });
 
-  it("shows an empty state for no matches", () => {
-    render(<SearchDialog records={RECORDS} />);
-    fireEvent.click(screen.getByRole("button", { name: /search the site/i }));
+  it("shows an empty state for no matches", async () => {
+    mockFetch();
+    render(<SearchDialog />);
+    await openDialog();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzzz" } });
     expect(screen.getByText(/No matches/)).toBeInTheDocument();
   });

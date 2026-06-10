@@ -16,19 +16,27 @@ const TYPE_LABEL: Record<SearchRecord["type"], string> = {
 /**
  * Site-wide search: a header button (and Cmd/Ctrl-K) opening a native
  * <dialog> — which gives focus trapping, Esc-to-close, and a backdrop for
- * free. Records are built at build time and passed down as props.
+ * free. The index is emitted at build time as /search-index.json and
+ * fetched lazily on first open, so it never weighs down page HTML.
  */
-export function SearchDialog({ records }: { records: SearchRecord[] }) {
+export function SearchDialog() {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const [records, setRecords] = useState<SearchRecord[] | null>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const results = searchRecords(records, query);
+  const results = records ? searchRecords(records, query) : [];
 
   function open() {
     dialogRef.current?.showModal();
     inputRef.current?.focus();
+    if (records === null) {
+      fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/search-index.json`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data: SearchRecord[]) => setRecords(data))
+        .catch(() => setRecords([]));
+    }
   }
 
   function close() {
@@ -153,7 +161,7 @@ export function SearchDialog({ records }: { records: SearchRecord[] }) {
           </ul>
           {query.trim() && results.length === 0 ? (
             <p className="px-3 py-2 text-sm" style={{ color: "var(--fg-muted)" }}>
-              No matches for &ldquo;{query}&rdquo;.
+              {records === null ? "Loading the index…" : `No matches for “${query}”.`}
             </p>
           ) : null}
           <p
