@@ -1,0 +1,95 @@
+export const sources = [
+  { label: "IEEE 802.1D — Spanning Tree Protocol", href: "https://standards.ieee.org/ieee/802.1D/" },
+  { label: "IEEE 802.1w / 802.1Q — Rapid & Multiple Spanning Tree", href: "https://standards.ieee.org/ieee/802.1Q/" },
+  { label: "Perlman, 'An Algorithm for Distributed Computation of a Spanning Tree' (1985)", href: "https://dl.acm.org/doi/10.1145/318951.319004" },
+];
+
+## The problem: Ethernet plus loops equals meltdown
+
+You want redundant links between switches — one cable cut shouldn't drop a hospital floor. But
+Ethernet frames carry **no TTL**, and switches **flood** broadcasts and unknown destinations. Add
+one physical loop and a single ARP broadcast circulates forever, *multiplying* at every switch: a
+**broadcast storm** that saturates links and pins CPUs within seconds, while MAC tables flap as
+the same source appears on multiple ports. Radia Perlman's answer (1985): let switches compute a
+**spanning tree** — keep redundant links physically connected but logically **blocked**, so the
+active topology is always loop-free, and unblock them when failures demand it.
+
+(Her own commentary, in verse: *"First, the root must be selected / by ID it is elected…"* — the
+Algorhyme. Networking's only load-bearing poem.)
+
+## How the tree is built
+
+Switches exchange **BPDUs** (bridge protocol data units) and run a distributed election with
+three steps — each decided by "lowest wins":
+
+1. **Elect the root bridge**: lowest *bridge ID* (priority, then MAC). Every other decision is
+   relative to the root — which is why you set the priority on your core switch instead of letting
+   a desktop-grade unit win by accident of MAC address.
+2. **Each switch picks its root port**: the interface with the lowest path cost to the root
+   (costs scale inversely with link speed).
+3. **Each segment picks its designated port** (the segment's best path toward the root);
+   everything that's neither root nor designated goes to **blocking** — alive, listening to
+   BPDUs, forwarding nothing.
+
+Result: exactly one active path between any two points. A link dies → BPDUs stop → blocked ports
+near the failure transition to forwarding, restoring connectivity over the redundant path.
+
+<Callout variant="warning" title="Classic STP's painful price">
+802.1D ports crawl through listening → learning → forwarding over **30–50 seconds** — an eternity
+during which a newly-connected server gets nothing (and DHCP times out). **RSTP (802.1w)** is the
+fix everyone actually runs: explicit proposal/agreement handshakes between switches converge in
+under a second, and **edge ports** (PortFast) skip the dance entirely for host-facing interfaces.
+Same algorithm, modern reflexes.
+</Callout>
+
+## The operational catechism
+
+- **Set the root deliberately** (priority 4096/8192 on the intended core pair). Topology should be
+  a design decision, not a MAC-address lottery.
+- **Guard the edges**: **BPDU Guard** shuts down an access port that receives any BPDU — the
+  defense against the desk switch (or attacker) that would join the tree, possibly *as root*
+  (**Root Guard** is the targeted version). An attacker who wins the root election sits on every
+  inter-switch path: STP manipulation is a real MITM technique.
+- **One tree per what?** Classic STP: one tree total. **PVST+ (Cisco) / MSTP (802.1s)**: trees per VLAN (or
+  per group), letting you block different links for different VLANs and actually *use* redundant
+  bandwidth.
+- **Know the symptoms cold**: storm = flat-lined network, all activity LEDs solid, switch CPUs
+  pegged, MAC flapping in the logs; the trigger is usually "someone plugged a cable into two
+  jacks" or a BPDU-filtered port closing a loop.
+
+## After the tree: why data centers moved on
+
+A tree wastes every blocked link — fine for offices, ruinous for east-west data-center traffic.
+Modern fabrics keep all links forwarding by changing the game: **leaf-spine topologies** running
+**ECMP routing** (the loop problem handled at L3, where TTL exists), or L2-over-L3 overlays like
+[VXLAN](/protocols/vlan/) with EVPN. STP remains as the campus workhorse and the safety net under
+everything — the protocol you configure so you never see it work.
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why do Ethernet loops melt networks when IP routing loops merely waste some bandwidth?",
+      options: [
+        "Switches are slower than routers",
+        "Frames have no TTL and broadcasts are flooded — loops multiply traffic forever instead of letting it expire",
+        "Routers have bigger buffers",
+      ],
+      answer: 1,
+      explanation:
+        "An IP packet in a loop dies at TTL 0. A looped broadcast frame is copied by every switch on every cycle, growing exponentially until links saturate — hence STP's existence.",
+    },
+    {
+      q: "BPDU Guard just shut down a conference-room port. What most likely happened?",
+      options: [
+        "The cable failed",
+        "Someone connected a switch (or sent crafted BPDUs) on a port meant for end hosts",
+        "The port's VLAN was deleted",
+      ],
+      answer: 1,
+      explanation:
+        "End hosts don't speak STP. A BPDU on an access port means an unauthorized bridge — plugged-in desk switch, looped cable, or an attacker angling to join (or root) the tree. Err-disable is the intended response.",
+    },
+  ]}
+/>

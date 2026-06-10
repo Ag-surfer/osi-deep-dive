@@ -1,0 +1,109 @@
+export const sources = [
+  { label: "RFC 9293 — Transmission Control Protocol", href: "https://www.rfc-editor.org/rfc/rfc9293.html" },
+  { label: "RFC 7323 — TCP Extensions for High Performance", href: "https://www.rfc-editor.org/rfc/rfc7323.html" },
+  { label: "RFC 2018 — TCP Selective Acknowledgment", href: "https://www.rfc-editor.org/rfc/rfc2018.html" },
+  { label: "Stevens, TCP/IP Illustrated, Vol. 1", href: "https://www.pearson.com/" },
+];
+
+## The contract
+
+TCP's promise is audacious: a **reliable, ordered, error-checked byte stream** between two
+processes, built on a network that loses, duplicates, reorders, and delays packets. Five decades
+on, it still carries most of the internet — every HTTPS page (until HTTP/3), every SSH session,
+every database connection. Understanding TCP deeply is the closest thing networking has to a
+universal skill.
+
+The stream abstraction is the part beginners miss: TCP has **no message boundaries**. You write
+100 bytes twice; the receiver may read 200 once, or 50 four times. Every protocol above TCP must
+frame its own messages (HTTP's Content-Length, length-prefixed records) — forgetting this is the
+root of a thousand parsing bugs.
+
+## The header, field by field
+
+<NamedHeader id="tcp" />
+
+The fields tell the whole design: ports (multiplexing), sequence/acknowledgment numbers
+(reliability and ordering), window (flow control), flags (connection state machine), checksum
+(integrity, computed with the pseudo-header), options (the extension mechanism that kept a 1981
+protocol modern).
+
+## Connection lifecycle
+
+**Setup — three-way handshake.** SYN → SYN-ACK → ACK synchronizes both directions' randomized
+initial sequence numbers and negotiates options. The critical options are negotiated only on SYNs: **MSS**
+(biggest segment I accept), **window scale** (multiply the 16-bit window by up to 2¹⁴ — without it
+throughput dies on high-BDP paths), **SACK-permitted**, and **timestamps** (negotiated on the SYN,
+then carried on every segment for RTT measurement + wrapped-sequence protection).
+
+**Teardown — four messages, two half-closes.** Each side independently FINs its direction; data
+can still flow the other way (half-close). The side that closes first lands in **TIME_WAIT** for
+2×MSL — to retransmit the last ACK if needed and to let old duplicates die before the port pair is
+reused. The state machine in between (LISTEN, SYN_SENT, ESTABLISHED, FIN_WAIT, CLOSE_WAIT…) is
+what `ss`/`netstat` show you; piles of CLOSE_WAIT mean *your application* forgot to close sockets.
+
+## Reliability machinery
+
+- **Cumulative ACKs**: "I have every byte before N." Cheap, robust, but says nothing about later
+  data that arrived.
+- **SACK** fills that gap: "…and also ranges N+1000–N+2000," enabling selective retransmission
+  instead of resending everything.
+- **Retransmission timeout**: continuously estimated as `SRTT + 4·RTTVAR` (RFC 6298), doubled on
+  every consecutive failure; **Karn's rule** excludes retransmitted segments from the estimate.
+- **Fast retransmit**: three duplicate ACKs imply a specific loss — resend immediately, no timeout
+  wait.
+
+## The two throttles
+
+**Flow control** protects the receiver: the advertised window is the buffer space left; a window
+of zero pauses the sender (probed by keepalive-like *window probes* — and shrunken-window bugs are
+why the **silly window syndrome** avoidance rules exist). **Congestion control** protects the
+network: slow start's exponential growth to a threshold, then AIMD — with the modern story (CUBIC,
+BBR) covered in depth on the [Transport layer page](/layers/transport/). Effective rate is always
+`min(rwnd, cwnd)` per RTT.
+
+<Callout variant="insight" title="Numbers to carry around">
+Throughput ≈ window / RTT. A 64 KB un-scaled window across 100 ms = ~5 Mb/s, on any link.
+Mathis's loss formula — rate ∝ MSS / (RTT · √loss) — explains why fat links with tiny loss rates
+still crawl, and why CDNs fight for RTT, not bandwidth.
+</Callout>
+
+## Operational gotchas that fill on-call retros
+
+- **Nagle's algorithm vs delayed ACKs**: both batch tiny packets to save overhead; combined, they
+  can add 40–200 ms stalls to chatty request/response patterns — why latency-sensitive software
+  sets `TCP_NODELAY`.
+- **Keepalives are off by default** and hours-long when on; middleboxes drop idle state in
+  minutes. Long-lived idle connections need application-level heartbeats.
+- **SYN floods** exhaust the half-open table; **SYN cookies** encode the connection state into the
+  ISN itself so the server stores nothing until the handshake completes.
+- **RST semantics**: instant "refused" = reachable host, no listener (or a REJECT firewall);
+  silent timeout = packets vanishing. Reading the failure mode is free diagnosis.
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "An app sends two 100-byte writes over TCP. What may the receiver read?",
+      options: [
+        "Exactly two 100-byte messages — TCP preserves writes",
+        "Any split of the 200 bytes, in order — TCP is a byte stream with no message boundaries",
+        "One 200-byte datagram, possibly out of order",
+      ],
+      answer: 1,
+      explanation:
+        "TCP guarantees the bytes and their order — nothing about chunking. Application protocols must frame their own messages, which is why HTTP has Content-Length and chunked encoding.",
+    },
+    {
+      q: "A server shows thousands of sockets in CLOSE_WAIT. Who's at fault?",
+      options: [
+        "The network is dropping FINs",
+        "The local application — it received the peer's FIN but never closed its own socket",
+        "The kernel's TIME_WAIT timer",
+      ],
+      answer: 1,
+      explanation:
+        "CLOSE_WAIT means TCP delivered the remote close and is waiting for the local app to call close(). Accumulation is a socket leak in your code, not a network problem.",
+    },
+  ]}
+/>

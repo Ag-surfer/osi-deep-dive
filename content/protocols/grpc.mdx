@@ -1,0 +1,107 @@
+export const sources = [
+  { label: "gRPC — Official documentation", href: "https://grpc.io/docs/" },
+  { label: "RFC 9113 — HTTP/2", href: "https://www.rfc-editor.org/rfc/rfc9113.html" },
+  { label: "Protocol Buffers — Language Guide", href: "https://protobuf.dev/" },
+];
+
+## Calling a function on another machine
+
+The dream is old — **remote procedure call**, making a network request look like a local function
+call so distributed code reads like normal code. Sun RPC, CORBA, SOAP, Java RMI all chased it and
+aged badly. **gRPC** (Google, 2015) is the current winner for internal service-to-service
+communication, and it works because it stopped reinventing transport and stood on two modern
+foundations: **Protocol Buffers** for the contract and **HTTP/2** for the plumbing. The OSI lens:
+gRPC manages the *dialogue* — call lifecycles, streams, deadlines — which is Session-layer work,
+implemented over HTTP/2 streams.
+
+## Contract-first: the .proto is the API
+
+You don't document a gRPC API in prose; you *define* it:
+
+```protobuf
+service UserService {
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc ListUsers(ListUsersRequest) returns (stream User);  // server streaming
+}
+message GetUserRequest { int64 id = 1; }
+```
+
+From that single file, the toolchain generates type-safe client and server **stubs in every
+language** — Go server, Python client, TypeScript frontend, all guaranteed to agree on the wire
+format because they're generated from the same source of truth. The benefits flow from
+[Protocol Buffers](/protocols/serialization/): compact binary on the wire, and **schema evolution
+rules** (never reuse field numbers, new fields optional) that let services deploy independently —
+the property that makes gRPC viable at microservice scale.
+
+## Four call types — the real reason to choose gRPC
+
+HTTP/2's bidirectional streams let gRPC offer call shapes plain request/response can't:
+
+| Type | Shape | Use |
+| --- | --- | --- |
+| **Unary** | one request → one response | ordinary RPC |
+| **Server streaming** | one request → stream of responses | live feeds, large result sets, progress |
+| **Client streaming** | stream of requests → one response | uploads, telemetry batching |
+| **Bidirectional** | both stream independently | chat, real-time sync, interactive sessions |
+
+Each call is its own HTTP/2 stream, so many concurrent calls **multiplex over one connection**
+without head-of-line blocking between them — and metadata, deadlines, and cancellation propagate
+as part of the call.
+
+<Callout variant="insight" title="Deadlines and cancellation: the distributed-systems part">
+gRPC bakes in two things hand-rolled REST usually forgets. A **deadline** travels *with* the call
+and is honored across the chain: if A calls B with 100 ms left and B calls C, C learns it has under 100
+ms — so a slow leaf doesn't pin resources all the way up. And **cancellation** propagates: client
+hangs up, every downstream call learns to stop. These turn "RPC" from a function-call illusion into
+an honest distributed-systems primitive — the difference between a demo and a system that survives
+a slow dependency.
+</Callout>
+
+## The catch: browsers can't speak it
+
+gRPC needs low-level control of HTTP/2 frames that browser `fetch` doesn't expose — so a web page
+**cannot call a gRPC service directly**. The bridges: **gRPC-Web** (a constrained variant + a
+proxy like Envoy that translates) for browser clients, and increasingly **Connect** (buf's
+protocol that speaks gRPC, gRPC-Web, and a plain-HTTP/JSON mode from one server). The practical
+shape of most stacks: REST/JSON or Connect at the browser edge, gRPC humming between the backend
+services where its streaming, typing, and deadline propagation pay off.
+
+## Operational notes
+
+- **Status codes are their own enum** (`OK`, `NOT_FOUND`, `DEADLINE_EXCEEDED`,
+  `RESOURCE_EXHAUSTED`, `UNAVAILABLE`…), not HTTP statuses — `UNAVAILABLE` vs `DEADLINE_EXCEEDED`
+  is the retry-vs-give-up distinction your interceptors live on.
+- **Load balancing differs from REST**: gRPC holds long-lived multiplexed connections, so naive
+  L4 balancing pins all of a client's calls to one backend. You want L7/gRPC-aware balancing or
+  client-side load balancing — a classic gotcha when teams move from REST.
+- **Debuggability is the tax**: binary frames mean no curl-and-eyeball; `grpcurl`, server
+  reflection, and channelz are the substitutes.
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why can't a browser call a gRPC service directly?",
+      options: [
+        "Browsers don't support TLS 1.3",
+        "gRPC needs low-level HTTP/2 frame control that browser fetch doesn't expose — hence gRPC-Web/Connect plus a translating proxy",
+        "Protocol Buffers are banned in browsers",
+      ],
+      answer: 1,
+      explanation:
+        "The browser networking API can't manipulate HTTP/2 framing the way gRPC requires, so web clients use gRPC-Web or Connect through a proxy that bridges to native gRPC.",
+    },
+    {
+      q: "What does a propagating gRPC deadline buy a distributed system?",
+      options: [
+        "Faster serialization",
+        "Each downstream call inherits the remaining time, so a slow leaf service can't tie up resources all the way up the call chain",
+        "Automatic retries",
+      ],
+      answer: 1,
+      explanation:
+        "Deadlines travel with the call and shrink along the chain; combined with cancellation propagation, they prevent one slow dependency from cascading into held resources everywhere upstream.",
+    },
+  ]}
+/>

@@ -1,0 +1,110 @@
+export const sources = [
+  { label: "RFC 3261 — SIP: Session Initiation Protocol", href: "https://www.rfc-editor.org/rfc/rfc3261.html" },
+  { label: "RFC 4566 — SDP: Session Description Protocol", href: "https://www.rfc-editor.org/rfc/rfc4566.html" },
+  { label: "RFC 8866 — SDP (updated)", href: "https://www.rfc-editor.org/rfc/rfc8866.html" },
+];
+
+## The protocol that sets up the call
+
+When you make a VoIP call, join a video conference, or your phone rings over a modern carrier
+(VoLTE is SIP underneath), something has to find the other party, negotiate what media you'll
+exchange, ring them, and tear it all down afterward. That's **SIP** — the **signaling** protocol
+that *establishes, modifies, and ends sessions*. It is the Session layer made literal: SIP never
+carries your voice; it carries the conversation *about* the conversation.
+
+## Signaling vs media: the split that defines it
+
+<Callout variant="insight" title="SIP sets up the call; RTP carries it">
+This separation is the whole architecture. **SIP** (the signaling) negotiates and controls; the
+actual audio/video flows over a *different* protocol, **RTP**, usually **directly between the two
+endpoints** while SIP messages may have travelled through a chain of servers. So the control path
+and the media path differ — which is why "the call connects but there's no audio" is the
+signature SIP/NAT failure (signaling succeeded; media couldn't find a path), and why
+troubleshooting VoIP means always asking *which* path broke.
+</Callout>
+
+SIP deliberately mimics HTTP — text-based, request/response, header-rich — so it reads familiarly:
+
+```
+INVITE sip:bob@example.com SIP/2.0
+Via: SIP/2.0/UDP pc.example.org;branch=z9hG4bK776
+From: Alice <sip:alice@example.org>;tag=1928
+To: Bob <sip:bob@example.com>
+Call-ID: a84b4c76e66710
+CSeq: 314159 INVITE
+Content-Type: application/sdp
+
+[SDP body: "I offer Opus audio on port 49170, here's my IP"]
+```
+
+## The INVITE dialogue
+
+A call setup is a recognizable three-step, with provisional responses keeping everyone informed:
+
+<SequenceDiagram
+  actors={["Alice", "Bob"]}
+  steps={[
+    { from: 0, to: 1, label: "INVITE (SDP offer: my codecs, my media address)" },
+    { from: 1, to: 0, label: "180 Ringing (Bob's phone is alerting)", dashed: true },
+    { from: 1, to: 0, label: "200 OK (SDP answer: agreed codec, Bob's media address)", dashed: true },
+    { from: 0, to: 1, label: "ACK — three-way handshake complete" },
+    { from: 0, to: 1, label: "— RTP media flows directly, SIP steps aside —" },
+    { from: 0, to: 1, label: "BYE → 200 OK (teardown)" },
+  ]}
+  caption="INVITE / 200 OK / ACK establishes the dialogue (carrying the SDP offer/answer that negotiates codecs and media addresses); BYE ends it. The voice itself never touches SIP."
+/>
+
+The **SDP** body inside the INVITE/200 is the negotiation: an **offer/answer** exchange where each
+side lists codecs, media types, and the IP/port to send RTP to, converging on a shared set.
+Methods beyond INVITE round it out: **REGISTER** (tell your provider where to reach you — how your
+phone "logs in"), **BYE**, **CANCEL**, **REFER** (transfer), **OPTIONS** (capability probe).
+
+## Why NAT is SIP's nemesis
+
+<Callout variant="warning" title="The IP-address-in-the-body problem">
+SIP/SDP put **IP addresses inside the message body** ("send your audio to 192.168.1.50:49170") —
+a private address that's meaningless once the packet crosses NAT. Signaling reaches the server,
+but the media address it advertised is unroutable, so RTP has nowhere to go: **one-way or no
+audio**. The fixes are a tour of NAT traversal: **STUN** (ask a public server "what's my external
+address?" and advertise *that*), **TURN** (when STUN fails behind symmetric NAT, relay media
+through a public server — reliable but costs bandwidth), and **ICE** (try every candidate
+address — host, STUN-discovered, TURN-relayed — and pick whatever works). WebRTC inherited this
+entire stack wholesale; it's the same machinery in the browser.
+</Callout>
+
+## Where it lives today
+
+SIP quietly runs an enormous amount: enterprise PBX systems and **SIP trunking** (replacing
+physical phone lines with IP), carrier **VoLTE/VoWiFi** (your "regular" mobile calls), and as the
+conceptual ancestor of WebRTC's signaling. Security mirrors the rest of the stack: **SIPS** (SIP
+over TLS) protects signaling, **SRTP** encrypts the media, and unsecured SIP endpoints are a
+favorite target for toll fraud — attackers placing premium-rate calls on your dime.
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "A SIP call connects (the phone rings, the call 'answers') but neither side hears audio. Where's the fault?",
+      options: [
+        "The SIP signaling failed",
+        "Signaling succeeded but the media (RTP) path didn't — classically a NAT problem with the IP address advertised in SDP",
+        "The codec negotiation never happened",
+      ],
+      answer: 1,
+      explanation:
+        "SIP and RTP take different paths. A ringing, answered call means signaling worked; no audio means RTP can't flow — usually because SDP advertised a private address unreachable across NAT (fixed by STUN/TURN/ICE).",
+    },
+    {
+      q: "What does the SDP body inside a SIP INVITE actually do?",
+      options: [
+        "Carries the compressed audio",
+        "Describes the media offer — codecs and the IP/port to send RTP to — for the offer/answer negotiation",
+        "Encrypts the signaling",
+      ],
+      answer: 1,
+      explanation:
+        "SDP is the session description: each side offers/answers its codecs and media endpoints so they converge on what to send and where. The media itself rides RTP, not SIP.",
+    },
+  ]}
+/>

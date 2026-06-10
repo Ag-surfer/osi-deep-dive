@@ -1,0 +1,93 @@
+export const sources = [
+  { label: "RFC 4251 — SSH Protocol Architecture", href: "https://www.rfc-editor.org/rfc/rfc4251.html" },
+  { label: "RFC 4252 — SSH Authentication Protocol", href: "https://www.rfc-editor.org/rfc/rfc4252.html" },
+  { label: "RFC 4254 — SSH Connection Protocol", href: "https://www.rfc-editor.org/rfc/rfc4254.html" },
+];
+
+## The operations layer of the internet
+
+SSH is how humans (and their automation) touch servers: remote shells, `scp`/`sftp`, every `git
+push` over `git@`, Ansible runs, CI deploy steps, and an underappreciated tunneling toolkit. It
+replaced telnet/rlogin/ftp — protocols that shipped passwords in cleartext — and became so load-
+bearing that "do you have SSH access?" is shorthand for "do you really control this machine?"
+
+## Three protocols in a trenchcoat
+
+RFC 4251 splits SSH into layers — a useful interview answer in itself:
+
+1. **Transport layer** (RFC 4253): runs over TCP/22; negotiates algorithms, performs a
+   Diffie-Hellman-family key exchange, authenticates the **server** by its host key, and turns the
+   connection into an encrypted, integrity-protected pipe. Periodic rekeying included.
+2. **User authentication** (RFC 4252): inside that pipe, the client proves identity — password, or
+   far better, **public key**: the server issues a challenge; the client signs it with the private
+   key; the matching public key in `authorized_keys` settles it. Nothing secret crosses the wire.
+3. **Connection layer** (RFC 4254): multiplexes the pipe into **channels** — your shell is one,
+   each forwarded port is another, an `sftp` subsystem a third — with per-channel flow control.
+   One TCP connection, many logical sessions (the trick `ControlMaster` connection reuse exploits).
+
+<Callout variant="warning" title="The TOFU problem">
+That first-connection prompt — *"authenticity of host … can't be established, fingerprint is
+SHA256:…"* — is SSH's honest admission that it has no CA hierarchy. The model is **trust on first
+use**: accept once, pin forever in `known_hosts`, scream if it ever changes. Blindly typing "yes"
+is accepting a possible MITM; the disciplined fixes are out-of-band fingerprint verification,
+SSHFP records in DNSSEC-signed zones, or **SSH certificates** (below).
+</Callout>
+
+## The tunneling toolkit
+
+SSH's channels make it a general-purpose secure transport, and these three flags are the working
+engineer's Swiss army knife:
+
+- **`-L local:host:port`** — local forward: expose a remote-side service (the prod database
+  reachable only from the bastion) on your laptop's localhost.
+- **`-R remote:host:port`** — reverse forward: expose your laptop's service on the remote machine
+  — the "webhook to my dev box" and NAT-escape trick.
+- **`-D 1080`** — a local SOCKS proxy that routes arbitrary TCP through the server: a one-flag
+  VPN-lite.
+- **`ProxyJump` (`-J bastion`)** — chain through a hardened entry host with end-to-end encryption
+  to the final target; the standard pattern for private networks.
+- **Agent forwarding** (`-A`) carries your key challenges back to your local `ssh-agent` — with
+  the caveat that root on the intermediate host can use (not read) your keys while connected;
+  `ProxyJump` avoids that exposure and is preferred.
+
+## Operating SSH like a grown-up fleet
+
+- **Disable password auth** (`PasswordAuthentication no`) — internet-facing SSH gets brute-forced
+  within minutes of existing; keys end that entire class.
+- **Modern keys**: Ed25519 (small, fast, misuse-resistant); RSA only at ≥3072 bits for legacy
+  interop. Hardware-backed keys (`sk-ssh-ed25519`, i.e. FIDO2) bind login to a physical touch.
+- **SSH certificates** replace both `known_hosts` sprawl and `authorized_keys` sprawl: an internal
+  CA signs short-lived user and host certs, so access expires automatically and host identity is
+  verifiable on first contact — the pattern behind every serious bastion/zero-trust setup
+  (Teleport, AWS-style ephemeral certs).
+- `sshd` config hygiene: `PermitRootLogin no`, `AllowUsers`/groups, `LogLevel VERBOSE` (logs key
+  fingerprints — who exactly logged in), and idle keepalives tuned for NAT timeouts.
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "In public-key SSH login, what travels over the network?",
+      options: [
+        "The private key, encrypted with the session key",
+        "A signature over a server-issued challenge — the private key never leaves the client",
+        "A hash of the private key",
+      ],
+      answer: 1,
+      explanation:
+        "The server checks the signature against authorized_keys. Compromise of the wire (or the server) reveals no reusable secret — the core advantage over passwords.",
+    },
+    {
+      q: "ssh -L 5432:db.internal:5432 bastion does what?",
+      options: [
+        "Exposes your laptop's port 5432 on the bastion",
+        "Makes localhost:5432 on your laptop reach db.internal:5432 through the encrypted bastion connection",
+        "Opens a SOCKS proxy on 5432",
+      ],
+      answer: 1,
+      explanation:
+        "-L is a local forward: listen locally, carry the traffic through the SSH channel, exit toward the target from the remote side. (-R is the mirror; -D is SOCKS.)",
+    },
+  ]}
+/>

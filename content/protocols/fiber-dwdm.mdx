@@ -1,0 +1,99 @@
+export const sources = [
+  { label: "ITU-T G.652 — Single-mode optical fibre", href: "https://www.itu.int/rec/T-REC-G.652" },
+  { label: "ITU-T G.694.1 — DWDM frequency grid", href: "https://www.itu.int/rec/T-REC-G.694.1" },
+  { label: "Agrawal, Fiber-Optic Communication Systems", href: "https://www.wiley.com/" },
+];
+
+## The glass the internet runs on
+
+Essentially all long-haul internet traffic — between cities, under oceans, across continents —
+travels as pulses of light in **optical fiber**, a strand of ultra-pure glass thinner than a hair.
+Fiber wins for three physical reasons copper can't touch: **enormous bandwidth** (light oscillates
+at ~200 THz, so there's vast spectrum to modulate), **immunity to electromagnetic interference**
+(it's glass — no antenna effect, no crosstalk), and **astonishingly low loss** (a signal can run
+~80 km before needing amplification). The submarine cables crossing the Pacific are this, bundled
+and armored.
+
+## Single-mode vs multi-mode: the one distinction to know
+
+<Callout variant="insight" title="It's about the light's path, not the data rate">
+**Multi-mode** fiber has a wide core (~50 µm) in which light bounces along *many* paths ("modes").
+Cheap LEDs/VCSELs drive it, but the modes arrive at slightly different times — **modal
+dispersion** smears the pulse — so it's limited to short reach (data-center rows, building risers,
+~hundreds of meters). **Single-mode** fiber has a core so narrow (~9 µm) that light travels
+essentially **one path**, eliminating modal dispersion; driven by precise lasers, it reaches tens
+to thousands of kilometers. The rule of thumb: **multi-mode inside a building, single-mode between
+buildings and cities.** Mixing them, or mismatching transceiver to fiber type, is a common and
+baffling field fault.
+</Callout>
+
+## DWDM: many colors, one fiber
+
+A single laser uses a tiny slice of the fiber's capacity. **Wavelength-division multiplexing**
+runs *many* independent signals down one strand, each on its own **wavelength** (color) of light —
+they don't interfere any more than red and blue light do, and a prism-like device combines them in
+and splits them out. **Dense WDM** (ITU G.694.1) packs ~80–96 channels onto a precise frequency
+grid (50 GHz spacing), each carrying 100–400 Gb/s+, for **tens of terabits per second on a single
+fiber pair**. It's frequency-division multiplexing — the same idea as radio stations sharing the
+air — done with light, and it's why a fiber laid decades ago keeps getting faster: you upgrade the
+*optics on the ends*, not the buried glass.
+
+<WorkedExample title="Why a 20-year-old fiber keeps getting faster">
+1. The glass between two cities was laid once and is essentially passive — it just guides light.
+2. Capacity lives in the **transceivers** at each end: a 2005 link might have run one 10G
+   wavelength; swap in modern DWDM gear and the *same fiber* carries 80 wavelengths × 400G.
+3. The lever is **coherent optics** — modern transceivers modulate light's amplitude *and phase*
+   (QAM on a light wave) and use DSP to undo dispersion electronically, squeezing far more bits
+   per wavelength than on-off keying ever could.
+
+So the capacity curve climbs without digging: investment moves to the endpoints, and the buried
+glass is a decades-long asset. This is the economics that built the internet's backbone.
+</WorkedExample>
+
+## The supporting cast
+
+- **EDFAs** (erbium-doped fiber amplifiers): amplify *all* DWDM wavelengths at once, *optically*,
+  without converting back to electronics — the invention that made long-haul WDM economic.
+- **Loss budget**: every connector, splice, and kilometer costs decibels; designing a link means
+  adding up the losses and confirming the receiver still hears the signal. The everyday version of
+  Shannon's SNR limit.
+- **PONs** (passive optical networks): the fiber-to-the-home architecture — one fiber from the
+  exchange split passively among ~32 homes, each on a time/wavelength slot. The "fiber broadband"
+  on your bill.
+
+<Callout variant="security" title="Tapping the untappable">
+Fiber feels secure — no radiated signal to catch from afar — but a determined attacker can bend a
+fiber and capture the trace amount of light that leaks (microbends), or splice in a coupler. State-
+level submarine-cable tapping is documented. The lesson is the universal one: **assume the medium
+is hostile and encrypt above it.** Optical-layer encryption exists for backbone links, but
+end-to-end TLS is what actually protects your data regardless of who's listening to the glass.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "When do you use single-mode fiber rather than multi-mode?",
+      options: [
+        "When you need the cheapest possible transceivers",
+        "For long distances — its narrow core gives light essentially one path, eliminating the modal dispersion that limits multi-mode to short reach",
+        "Only for underwater cables",
+      ],
+      answer: 1,
+      explanation:
+        "Single-mode's ~9 µm core supports one propagation path, so pulses stay sharp over tens-to-thousands of km. Multi-mode's wider core is cheaper to drive but modal dispersion caps it at short runs.",
+    },
+    {
+      q: "How does DWDM multiply a single fiber's capacity?",
+      options: [
+        "By compressing the data before transmission",
+        "By carrying many independent signals on different wavelengths (colors) of light simultaneously — frequency-division multiplexing with light",
+        "By increasing the laser's power",
+      ],
+      answer: 1,
+      explanation:
+        "Each wavelength is an independent channel that doesn't interfere with the others; ~80–96 of them on the ITU grid push a single fiber pair into the tens of terabits — and upgrades happen at the optics, not the buried glass.",
+    },
+  ]}
+/>

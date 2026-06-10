@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { LAYERS, getLayer } from "@/lib/layers";
+import { protocolsForLayer } from "@/lib/protocols";
 import { pageMetadata } from "@/lib/site";
 import { LayerHero } from "@/components/LayerHero";
 import { PrevNext } from "@/components/PrevNext";
@@ -44,6 +46,7 @@ export default async function LayerPage({ params }: Params) {
   };
   const Content = mod.default;
   const sources = mod.sources ?? [];
+  const protocols = protocolsForLayer(layer.number);
 
   return (
     <article>
@@ -51,6 +54,35 @@ export default async function LayerPage({ params }: Params) {
       <div className="prose prose-neutral dark:prose-invert prose-headings:font-serif prose-h2:scroll-mt-20 prose-h2:border-b prose-h2:pb-1 prose-a:break-words max-w-none">
         <Content />
       </div>
+
+      {protocols.length > 0 ? (
+        <section className="mt-12">
+          <h2 className="font-serif text-xl font-semibold">Protocol deep dives</h2>
+          <p className="mt-2 text-sm" style={{ color: "var(--fg-muted)" }}>
+            Go deeper on the protocols and algorithms that live at this layer.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {protocols.map((p) => (
+              <Link
+                key={p.slug}
+                href={`/protocols/${p.slug}/`}
+                className="rounded-lg border p-4 transition-colors hover:bg-[var(--bg-soft)]"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-semibold">{p.name}</span>
+                  <span className="font-mono text-[10px]" style={{ color: "var(--fg-muted)" }}>
+                    {p.standard}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+                  {p.tagline}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {sources.length > 0 ? (
         <section className="mt-12">

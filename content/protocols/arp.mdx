@@ -1,0 +1,95 @@
+export const sources = [
+  { label: "RFC 826 — Address Resolution Protocol", href: "https://www.rfc-editor.org/rfc/rfc826.html" },
+  { label: "RFC 5227 — IPv4 Address Conflict Detection", href: "https://www.rfc-editor.org/rfc/rfc5227.html" },
+];
+
+## The glue between two address worlds
+
+You have a destination IP; to put a frame on the wire you need a destination **MAC**. ARP is the
+translator — and it sits in exactly the seam the OSI model draws between Layer 3 (logical, global)
+and Layer 2 (physical, local). It's tiny (RFC 826 is from 1982 and barely changed), it runs
+constantly under every IPv4 conversation, and its complete absence of authentication makes it one
+of the most reliable attack surfaces on any LAN.
+
+## The mechanism
+
+Two messages on the wire (a request and a reply), wrapped in cache operations:
+
+1. Host A wants `192.0.2.5`'s MAC. It checks its **ARP cache** first; on a miss it **broadcasts**
+   (to `ff:ff:ff:ff:ff:ff`): *"Who has 192.0.2.5? Tell 192.0.2.3."* Every host on the segment
+   receives it.
+2. Only the owner of `.5` replies — **unicast**: *"192.0.2.5 is at `a4:5e:60:…`."*
+3. A caches the mapping (minutes-long timer) and sends its frame. Everyone else who saw the
+   broadcast may opportunistically cache A's mapping too.
+
+The scoping rule is the load-bearing insight: **ARP only works within a broadcast domain.** For a
+remote destination, the host doesn't ARP for the server at all — it ARPs for its **default
+gateway** and ships the frame there. This is why the [subnet mask](/layers/network/) matters so
+much: it's what decides "local, so ARP for it" vs "remote, so ARP for the router."
+
+## Gratuitous ARP: the same packet, three jobs
+
+An unsolicited ARP — a host announcing its own mapping to nobody in particular — is mechanically
+identical to an attack and operationally essential:
+
+- **Announcement**: "I'm here, update your caches" after boot or an IP change.
+- **Duplicate detection** (RFC 5227): an ARP *probe* for your own address with sender IP `0.0.0.0`
+  (deliberately not gratuitous — the zero sender can't poison caches); any reply means a conflict.
+- **Failover**: when a standby device assumes a virtual IP (VRRP, load-balancer HA, live VM
+  migration), one gratuitous ARP instantly repoints every cache on the LAN to the new MAC — this
+  is how sub-second failover *works*.
+
+<WorkedExample title="Why your laptop reaches a server it never ARPed for">
+Laptop `192.168.1.50/24`, gateway `.1`, fetching `93.184.216.34` (remote):
+
+1. Mask says `93.184.216.34` is **not** on `192.168.1.0/24` → it's remote.
+2. So the laptop doesn't ARP for the server (it couldn't — that broadcast never leaves the LAN).
+   It ARPs for the **gateway** `192.168.1.1`.
+3. Frame: destination **MAC = the router's**, destination **IP = the server's**. The router
+   strips the frame, routes on the IP, and builds a fresh L2 frame for the next hop.
+4. Every hop repeats this — new MACs each link, same IPs end to end. ARP is the per-hop ritual
+   that makes global routing physically possible.
+</WorkedExample>
+
+## Security: the LAN's original sin
+
+<Callout variant="security" title="ARP spoofing and its descendants">
+ARP replies are believed unconditionally — there's no challenge, no signature, no state. Send
+forged replies claiming the **gateway's IP** maps to **your MAC**, and every victim sends you their
+internet traffic: a textbook on-path MITM (the engine inside tools like Ettercap and
+`bettercap`), enabling sniffing, SSL-strip attempts, and selective drops. It also powers
+**ARP-based DoS** (poison with a black-hole MAC). The defenses are switch-side because the
+protocol can't defend itself: **Dynamic ARP Inspection** validates ARP against the DHCP-snooping
+binding table and drops the liars; static ARP entries protect critical hosts; and the real
+backstop is **encrypt everything above** (TLS), so a successful MITM yields ciphertext. IPv6
+relives the whole drama with NDP — and the same medicine, RA Guard / SEND.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Your host sends traffic to a server three networks away. Whose MAC address does it ARP for?",
+      options: [
+        "The server's MAC",
+        "The default gateway's MAC — ARP only resolves within the local broadcast domain",
+        "No ARP is needed for remote hosts",
+      ],
+      answer: 1,
+      explanation:
+        "ARP broadcasts can't cross routers, so remote destinations are unreachable by ARP. The host resolves its gateway and forwards there; the destination IP stays the server's while the MAC is per-hop.",
+    },
+    {
+      q: "Why is Dynamic ARP Inspection implemented on the switch rather than in the ARP protocol?",
+      options: [
+        "Switches are faster",
+        "ARP itself has no authentication to extend — the switch must validate replies against a trusted binding (DHCP snooping)",
+        "The ARP RFC forbids host-side checks",
+      ],
+      answer: 1,
+      explanation:
+        "RFC 826 has no notion of proving a mapping. The trustworthy data lives in the switch's DHCP-snooping table, so the enforcement point is the switch port, not the credulous protocol.",
+    },
+  ]}
+/>

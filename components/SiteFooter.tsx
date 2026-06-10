@@ -17,6 +17,9 @@ export function SiteFooter() {
             <Link href="/" className="hover:text-[var(--fg)]">
               Home
             </Link>
+            <Link href="/protocols/" className="hover:text-[var(--fg)]">
+              Protocols
+            </Link>
             <Link href="/journey/" className="hover:text-[var(--fg)]">
               Packet Journey
             </Link>

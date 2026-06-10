@@ -1,0 +1,109 @@
+export const sources = [
+  { label: "IEEE 802.1Q — Virtual LANs", href: "https://standards.ieee.org/ieee/802.1Q/" },
+  { label: "RFC 7348 — VXLAN", href: "https://www.rfc-editor.org/rfc/rfc7348.html" },
+];
+
+## One wire, many networks
+
+A switch is, by default, **one broadcast domain** — every host hears every ARP, every broadcast,
+and lives in one flat security zone. VLANs break that apart in software: a 4-byte tag on the
+Ethernet frame partitions one physical switch (or a whole campus) into many isolated virtual LANs
+that **cannot reach each other without a router**. Finance and guest Wi-Fi share every cable and
+switch in the building while being as separated as if they were on different continents. It's the
+single most-used Layer-2 feature in enterprise networking.
+
+## The 802.1Q tag
+
+Four bytes inserted right after the source MAC:
+
+| Field | Bits | Purpose |
+| --- | --- | --- |
+| TPID | 16 | `0x8100` — marks the frame as tagged |
+| PCP | 3 | Priority (Class of Service) — 8 levels for QoS |
+| DEI | 1 | Drop-eligible under congestion |
+| **VLAN ID** | **12** | The VLAN — **4,094 usable** (0 and 4095 reserved) |
+
+That 12-bit ceiling — 4,094 — is the number that drives a thousand architecture decisions: it's
+why multi-tenant clouds outgrew VLANs and reached for [VXLAN's](#vxlan-when-4094-isnt-enough)
+24-bit space.
+
+## Access ports, trunks, and the native-VLAN trap
+
+- **Access ports** belong to exactly one VLAN. The host plugged in is blissfully unaware — frames
+  arrive untagged; the switch adds the tag on ingress and strips it on egress. Your laptop has no
+  idea it's in VLAN 30.
+- **Trunk ports** carry many VLANs between switches (and to routers/hypervisors), tags intact, so
+  one cable backhauls every VLAN. The link between two switches is almost always a trunk.
+- **The native VLAN** is the one VLAN sent *untagged* on a trunk (legacy compatibility) — and it's
+  a recurring security hole (see below). Best practice: set it to an unused, dead VLAN.
+
+Crossing VLANs requires Layer 3. "**Router-on-a-stick**" (one trunk to a router with sub-
+interfaces per VLAN) is the teaching example; in practice an **SVI** on a Layer-3 switch does
+inter-VLAN routing at hardware speed.
+
+<WorkedExample title="Why the moved desk lost the printer but kept the internet">
+Desks relocated; the new switch ports were left in the default VLAN 1 instead of the office VLAN
+20.
+
+1. DHCP on VLAN 1 hands out a *different subnet* than VLAN 20 — first clue: wrong IP range.
+2. The printer lives in VLAN 20's broadcast domain. ARP for it from VLAN 1 **never reaches it** —
+   different broadcast domains, full stop. `ping` times out, ARP never resolves.
+3. Internet still works because the router serves *both* VLANs upstream.
+
+The fix is one line — set the access ports to VLAN 20 — but the symptom ("internet yes, local
+resources no") is the unmistakable fingerprint of a VLAN-assignment mistake. Pure Layer-2
+misconfiguration wearing a Layer-3 disguise.
+</WorkedExample>
+
+## VXLAN: when 4,094 isn't enough
+
+<Callout variant="insight" title="Layer 2 stretched over Layer 3">
+Clouds need millions of isolated tenant networks, often spanning data centers an IP network apart
+— both impossible for 802.1Q. **VXLAN** (RFC 7348) wraps the entire Ethernet frame in **UDP** and
+tunnels it over any routed IP underlay, with a **24-bit** network identifier (~16.7 million
+segments). The mental model: an **underlay** (a boring, all-links-forwarding L3 leaf-spine fabric)
+carrying an **overlay** (virtual L2 segments that think they're on one cable). It's the same
+encapsulation trick as a VPN, and it's why your Kubernetes pods on different physical nodes believe
+they share a subnet. VLANs for the campus you wire; VXLAN for the fabric you scale.
+</Callout>
+
+## Security
+
+<Callout variant="security" title="VLAN hopping">
+Two classic escapes. **Switch spoofing**: a port left in dynamic-trunk auto-negotiation can be
+coaxed into becoming a trunk, handing the attacker every VLAN — disable DTP, set access ports
+hard. **Double tagging**: a frame with two 802.1Q tags whose outer tag matches the trunk's native
+VLAN; the first switch strips the outer (native = untagged) and forwards the inner tag onward,
+landing the frame in a VLAN the attacker can't normally reach. The defense is the native-VLAN
+hygiene above — never use VLAN 1 as native, never carry the native VLAN where it isn't needed.
+VLANs isolate, but they were never a strong security boundary on their own.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "A relocated workstation can browse the internet but can't reach the local printer. Most likely cause?",
+      options: [
+        "DNS failure",
+        "Its switch port is in the wrong VLAN — a separate broadcast domain from the printer, so ARP never resolves",
+        "The printer is powered off",
+      ],
+      answer: 1,
+      explanation:
+        "Different VLAN = different broadcast domain = ARP can't reach the printer, even on the same physical switch. The router still provides internet to both VLANs, producing the signature split symptom.",
+    },
+    {
+      q: "Why did multi-tenant clouds move from VLANs to VXLAN?",
+      options: [
+        "VXLAN is faster on the wire",
+        "802.1Q's 12-bit ID caps at 4,094 segments and can't span an IP-routed underlay; VXLAN's 24-bit ID (~16.7M) tunnels L2 over L3",
+        "VLANs don't support encryption",
+      ],
+      answer: 1,
+      explanation:
+        "Scale and substrate: clouds need millions of isolated networks spanning routed fabrics. VXLAN encapsulates Ethernet in UDP with a 24-bit VNI, delivering both.",
+    },
+  ]}
+/>

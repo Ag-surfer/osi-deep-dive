@@ -1,0 +1,101 @@
+export const sources = [
+  { label: "IEEE 802.3 — Ethernet", href: "https://standards.ieee.org/ieee/802.3/" },
+  { label: "IEEE 802.1D — MAC Bridges", href: "https://standards.ieee.org/ieee/802.1D/" },
+  { label: "Tanenbaum & Wetherall, Computer Networks, Ch. 4", href: "https://www.pearson.com/" },
+];
+
+## The protocol that refused to die
+
+Ethernet has buried every rival — Token Ring, FDDI, ATM — by being cheap, simple, and relentlessly
+re-invented: same frame format from 10 Mb/s coax in 1980 to 800 Gb/s fiber today. The deeper
+story is that "Ethernet" quietly changed species: the shared-medium, collision-managed protocol
+became a **switched, full-duplex, point-to-point** system that kept the old frame as its
+interface. Modern Ethernet *is* switching.
+
+## The frame
+
+<NamedHeader id="ethernet" />
+
+Details with operational teeth: the **64-byte minimum** (collision-detection legacy, padded
+transparently), the **1500-byte MTU** (and jumbo frames at ~9000 inside data centers — must match
+end-to-end or you get silent black holes), **EtherType** as the L2→L3 demux key, and the **FCS**
+whose per-port error counters are your first physical-layer diagnostic.
+
+## The learning switch: three rules, no configuration
+
+A switch builds its forwarding table by eavesdropping on source addresses — the algorithm fits on
+an index card:
+
+1. **Learn**: on every arriving frame, record *source MAC → ingress port* (with an aging timer,
+   ~5 min).
+2. **Forward**: destination known → send out exactly that port (unless it's the ingress port —
+   then discard: the destination is already on that segment).
+3. **Flood**: destination unknown, broadcast, or (unregistered) multicast → copy to every port
+   except the ingress.
+
+The elegance: it's self-configuring, self-healing (entries age out), correct without any topology
+knowledge — and the reply traffic teaches the switch what flooding didn't know.
+
+<WorkedExample title="Trace four frames through a fresh switch">
+Hosts A and B on ports 1 and 2; the table starts empty.
+
+1. **A → B**: source A learned on port 1; destination B unknown → flooded to all other ports.
+2. **B → A**: source B learned on port 2; destination A is in the table → unicast out port 1
+   only.
+3. **A → B** again: both known → unicast out port 2. Flooding has converged away.
+4. B's NIC moves to port 5 and transmits: the table simply *re-learns* B at port 5 — and this
+   same mechanism is why a **loop** is catastrophic: one broadcast circulating two paths makes B
+   appear to "move" thousands of times a second (**MAC flapping**) while multiplying — see
+   [Spanning Tree](/protocols/stp/).
+</WorkedExample>
+
+## Under the hood of a real switch
+
+- **CAM/TCAM hardware** does the lookups at line rate — forwarding is ASIC work, not CPU work,
+  which is why switches handle billions of packets per second.
+- **Cut-through vs store-and-forward**: start transmitting after reading just the destination MAC
+  (microseconds, but forwards corrupt frames) vs buffer-verify-forward (full FCS check). Trading
+  floors buy the former; most networks run the latter.
+- **Collision domains died, broadcast domains didn't**: every switched port is its own collision
+  domain (full duplex — CSMA/CD is retired), but one switch is still **one broadcast domain** —
+  every host hears every ARP request. Segmenting *that* is [VLANs'](/protocols/vlan/) job.
+- **Link aggregation (LACP, 802.1AX)** bonds parallel links into one logical pipe — with the
+  subtlety that a single flow hashes onto a single member link, so one elephant flow can't exceed
+  one link's speed.
+
+<Callout variant="security" title="Attacking the learning algorithm">
+**MAC flooding**: blast frames from random source addresses until the CAM table fills; many
+switches then flood *everything* (fail-open into hub mode) — the attacker now sees all traffic.
+Defense: port security (limit MACs per port). **MAC spoofing**: impersonate a host's address to
+hijack its frames — the reason 802.1X port authentication and DHCP-snooping-style controls exist.
+The lesson generalizes: data-plane learning with no authentication is convenient *and* gullible.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "A switch receives a frame for a destination MAC not in its table. What does it do?",
+      options: [
+        "Drops the frame and sends an error",
+        "Floods it out every port except the one it arrived on — the reply will teach it the location",
+        "Queries the router",
+      ],
+      answer: 1,
+      explanation:
+        "Unknown-unicast flooding guarantees delivery without topology knowledge; learning from the reply's source address makes subsequent frames unicast. Self-configuring by design.",
+    },
+    {
+      q: "Why can't one large file transfer exceed a single link's speed across a 4×10G LACP bundle?",
+      options: [
+        "LACP reserves links for control traffic",
+        "Per-flow hashing pins each flow to one member link to preserve in-order delivery",
+        "The MTU limits throughput",
+      ],
+      answer: 1,
+      explanation:
+        "Spraying one flow's frames across links would reorder them. LACP hashes the flow tuple to pick one link per flow — aggregate bandwidth scales with many flows, not one.",
+    },
+  ]}
+/>

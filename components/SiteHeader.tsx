@@ -5,6 +5,7 @@ import { SearchDialog } from "./SearchDialog";
 
 const NAV = [
   { href: "/layers/physical/", label: "Layers" },
+  { href: "/protocols/", label: "Protocols" },
   { href: "/journey/", label: "Packet Journey" },
   { href: "/anatomy/", label: "Anatomy" },
   { href: "/glossary/", label: "Glossary" },

@@ -1,0 +1,89 @@
+export const sources = [
+  { label: "RFC 768 — User Datagram Protocol", href: "https://www.rfc-editor.org/rfc/rfc768.html" },
+  { label: "RFC 8085 — UDP Usage Guidelines", href: "https://www.rfc-editor.org/rfc/rfc8085.html" },
+];
+
+## The eight-byte philosophy
+
+UDP adds exactly four things to IP — source port, destination port, length, checksum — in eight
+bytes, and stops. No connection, no ordering, no retransmission, no congestion control. RFC 768 is
+*three pages long*. That minimalism isn't a historical accident to be fixed; it's a deliberate
+position: give applications **ports plus a checksum** and let them choose everything else.
+
+<NamedHeader id="udp" />
+
+## When "no promises" is the right promise
+
+The cases where UDP wins share a shape — TCP's guarantees would cost more than they're worth:
+
+- **A late packet is worse than a lost one.** Live voice/video and games can't use a retransmitted
+  frame that arrives after its moment; better to conceal the loss and move on. TCP would stall the
+  stream to deliver stale data in order.
+- **The exchange is one round trip.** DNS: ~100 bytes each way. A TCP handshake would double the
+  cost before the question is even asked.
+- **You're broadcasting or multicasting.** Connections are point-to-point by definition; DHCP's
+  DISCOVER and mDNS rely on UDP's connectionless sends.
+- **You want to build your own transport.** The biggest modern reason — see below.
+
+The price: the application owns retries, dedup, ordering, and — this one is an internet-citizenship
+obligation (RFC 8085) — **congestion control**. An unthrottled UDP sender will happily bury a
+network.
+
+## Details engineers actually hit
+
+- **"Connection refused" on UDP exists**: a datagram to a closed port triggers ICMP *Port
+  Unreachable* — which is also how classic traceroute detects the final hop.
+- **The checksum is optional in IPv4** (all-zeros = none) but **mandatory in IPv6**, since IPv6
+  dropped its header checksum entirely.
+- **Fragmentation is the silent killer.** A 9 KB UDP datagram becomes 7 IP fragments; lose any one
+  and the whole datagram dies (and PMTUD black holes hit UDP with no TCP-style recovery). Serious
+  UDP protocols keep datagrams under ~1,400 bytes — QUIC mandates ≥1,200-byte path support and
+  probes upward.
+- **NAT timeouts are brutal**: with no connection to observe, NATs expire UDP mappings in tens of
+  seconds — why every UDP-based protocol (WireGuard, QUIC, VoIP) has keepalives.
+
+<Callout variant="security" title="Spoofing and amplification">
+No handshake means no proof the source address is real. Combine spoofable sources with services
+whose replies dwarf their queries (old DNS, NTP `monlist`, memcached — up to 50,000×) and you get
+**reflection/amplification DDoS**: attacker sends small spoofed queries "from" the victim; the
+servers flood the victim with big answers. Defenses: BCP 38 source filtering at edges, rate
+limiting and response-size limits on reflectors, and — for new protocols — handshakes that verify
+return routability before sending big replies (exactly what QUIC's Retry does).
+</Callout>
+
+## UDP as a foundation
+
+The modern pattern reframes UDP entirely: it's the **substrate for user-space transports**. QUIC
+(HTTP/3), WireGuard, DTLS, RTP/WebRTC — each wants behavior TCP can't offer (streams without
+head-of-line blocking, connection migration, datagram crypto) and ossified middleboxes won't pass
+a new IP protocol number. UDP is the one hole through every NAT and firewall that lets innovation
+ship. The kernel does ports; everything clever happens above.
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why must well-behaved UDP applications implement their own congestion control?",
+      options: [
+        "To improve checksum coverage",
+        "UDP provides none, and an unthrottled sender degrades the shared network for everyone (RFC 8085)",
+        "NAT requires it",
+      ],
+      answer: 1,
+      explanation:
+        "TCP's congestion control is what keeps the internet stable under load. UDP opts out at the transport, so the obligation moves up to the application — which QUIC, WebRTC, and friends all honor.",
+    },
+    {
+      q: "Why did QUIC build on UDP instead of registering a new IP protocol number?",
+      options: [
+        "UDP is faster than raw IP",
+        "Middleboxes and NATs pass UDP but drop unknown protocols — UDP is the deployable substrate",
+        "IPv6 forbids new transports",
+      ],
+      answer: 1,
+      explanation:
+        "Decades of firewalls and NATs only understand TCP and UDP; a new protocol number would be dropped at the first hotel Wi-Fi. Ossification made UDP the internet's extension point.",
+    },
+  ]}
+/>

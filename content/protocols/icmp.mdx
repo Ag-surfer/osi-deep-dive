@@ -1,0 +1,100 @@
+export const sources = [
+  { label: "RFC 792 — Internet Control Message Protocol", href: "https://www.rfc-editor.org/rfc/rfc792.html" },
+  { label: "RFC 4443 — ICMPv6", href: "https://www.rfc-editor.org/rfc/rfc4443.html" },
+  { label: "RFC 1191 — Path MTU Discovery", href: "https://www.rfc-editor.org/rfc/rfc1191.html" },
+];
+
+## IP's missing error channel
+
+IP is best-effort and silent: it has no way to say "that didn't work." ICMP is the bolt-on voice —
+a protocol riding *inside* IP (protocol 1; ICMPv6 is 58) whose messages report errors and carry
+diagnostics. It's small, ancient, and load-bearing: the two tools every engineer reaches for first
+(`ping`, `traceroute`) and the mechanism modern networking quietly depends on (Path MTU discovery)
+are all ICMP.
+
+## The message types that matter
+
+Each ICMP message is a **type** + **code** + the first bytes of the packet that provoked it (so
+the sender can match the error to a connection):
+
+| Type | Name | What it tells you |
+| --- | --- | --- |
+| 0 / 8 | Echo Reply / Echo Request | `ping` — reachability and round-trip time |
+| 3 | **Destination Unreachable** | Code 0 net, 1 host, 3 **port** (UDP's "refused"), 4 **fragmentation needed but DF set** — the PMTUD signal |
+| 5 | Redirect | "There's a better first hop" — mostly disabled now (spoofing risk) |
+| 11 | **Time Exceeded** | TTL hit zero — the message traceroute harvests |
+
+ICMPv6 (RFC 4443) keeps the architecture and adds its load-bearing roles: types 1–4 are the error
+family (*Packet Too Big*, type 2, replaces fragmentation-needed), while **Neighbor Discovery**
+(133–137) makes ICMPv6 the protocol IPv6 links literally cannot function without.
+
+## Three tools, one protocol
+
+**ping** sends Echo Requests and times the replies — the fastest possible proof that Layers 1–3
+work end-to-end. Loss percentage and RTT variance are diagnostic gold; remember only that many
+networks deprioritize or filter ICMP, so ping failing proves less than ping succeeding.
+
+**traceroute** is the elegant hack: send probes with TTL=1, 2, 3…; each router that decrements to
+zero returns *Time Exceeded*, revealing itself. (Unix traceroute sends UDP probes to high ports —
+the final hop answers *Port Unreachable* instead; Windows tracert uses Echo Requests; `mtr` runs
+the whole thing continuously with statistics.) The `* * *` rows usually mean a hop rate-limits
+ICMP generation, not that the path is broken — control-plane replies are throttled on every
+serious router.
+
+**Path MTU discovery** sets DF on everything and trusts the network to report "too big" via type
+3/code 4 (or ICMPv6 Packet Too Big) with the supported MTU. The sender caches the path MTU and
+sizes segments accordingly.
+
+<WorkedExample title="Anatomy of the PMTUD black hole">
+A VPN reduces a path's MTU to 1400. A server behind a firewall that drops all inbound ICMP sends
+1500-byte segments with DF set.
+
+1. The tunnel router can't forward them and can't fragment them (DF) — drops each one and sends
+   ICMP type 3 code 4, "frag needed, MTU 1400."
+2. The firewall eats the ICMP. The server hears nothing — no error, no ACK.
+3. TCP retransmits the same too-big segment, forever. Small packets (handshake, headers) fit, so
+   the connection "works" until real data flows — the signature *hangs-at-1%* symptom.
+
+Fixes: permit ICMP type 3/4 (and ICMPv6 type 2) through filters, clamp TCP MSS on the tunnel, or
+let RFC 4821 probe MTU without ICMP. The lesson: **ICMP is not optional plumbing.**
+</WorkedExample>
+
+## Security: the dual-use protocol
+
+<Callout variant="security" title="Attack surface and over-reaction">
+ICMP has a real abuse history — **Smurf** amplification (spoofed Echo to broadcast addresses),
+**ping floods**, covert channels tunneling data in Echo payloads, and redirect-based MITM. The
+industry's reflexive response — "block all ICMP" — causes more outages than it prevents, breaking
+PMTUD (IPv4) and the entire protocol (IPv6). The grown-up policy: rate-limit, allow the error
+types the stack depends on (type 3 including code 4, type 11, and ICMPv6 Packet Too Big), and
+filter the rest at the edge.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Traceroute shows '* * *' at hop 7 but later hops respond normally. Most likely explanation?",
+      options: [
+        "The path is broken at hop 7",
+        "Hop 7 rate-limits or doesn't send ICMP Time Exceeded — transit traffic still flows through it",
+        "TTL doesn't work past hop 6",
+      ],
+      answer: 1,
+      explanation:
+        "Generating ICMP is control-plane work routers deliberately throttle. Since later hops answer, packets clearly transit hop 7 fine — it just declines to introduce itself.",
+    },
+    {
+      q: "Which single firewall rule most reliably creates MTU black holes?",
+      options: [
+        "Blocking UDP port 53",
+        "Dropping all inbound ICMP — including type 3 code 4 'fragmentation needed'",
+        "Blocking TCP port 179",
+      ],
+      answer: 1,
+      explanation:
+        "Path MTU discovery sets DF and depends on hearing 'too big' errors. Silence that signal and large transfers hang while small packets sail through — the classic size-dependent failure.",
+    },
+  ]}
+/>

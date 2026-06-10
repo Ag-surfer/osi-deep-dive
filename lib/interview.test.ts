@@ -15,6 +15,7 @@ const VALID_ROUTES = new Set([
   "/models/",
   "/modern/",
   "/wireless/",
+  "/protocols/",
   ...LAYERS.map((l) => `/layers/${l.slug}/`),
 ]);
 

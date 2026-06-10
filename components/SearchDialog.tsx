@@ -11,6 +11,7 @@ const TYPE_LABEL: Record<SearchRecord["type"], string> = {
   glossary: "Glossary",
   question: "Interview Q",
   page: "Page",
+  protocol: "Protocol",
 };
 
 /**

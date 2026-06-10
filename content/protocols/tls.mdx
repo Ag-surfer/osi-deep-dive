@@ -1,0 +1,106 @@
+export const sources = [
+  { label: "RFC 8446 — TLS 1.3", href: "https://www.rfc-editor.org/rfc/rfc8446.html" },
+  { label: "RFC 5280 — X.509 Certificates / PKI", href: "https://www.rfc-editor.org/rfc/rfc5280.html" },
+  { label: "RFC 6960 — OCSP", href: "https://www.rfc-editor.org/rfc/rfc6960.html" },
+];
+
+## The layer the internet trusts
+
+Every padlock, every `https://`, every API call between services — TLS is the encryption layer
+under all of it, and the closest thing the internet has to universal infrastructure for
+confidentiality, integrity, and authentication. It wraps *any* byte stream (HTTP, SMTP, IMAP, the
+PostgreSQL wire protocol) without understanding it — which is exactly why the OSI model files it at
+the **Presentation layer**: it transforms the *representation* of data (to ciphertext) regardless
+of meaning, with a session-management aspect (handshake, resumption) bridging into Layer 5.
+
+## What it actually guarantees — and doesn't
+
+Three properties, precisely: **confidentiality** (eavesdroppers see ciphertext), **integrity**
+(tampering is detected and aborts the connection), and **server authentication** (you're talking
+to who the certificate says — *client* authentication is optional, the basis of mTLS). What it
+does **not** hide: that you contacted a given IP, the traffic's size and timing (defeating naive
+traffic analysis needs more), and — absent Encrypted Client Hello — the destination hostname in
+the SNI. TLS secures the pipe; it says nothing about whether the server itself is trustworthy.
+
+## The 1.3 handshake: one round trip
+
+TLS 1.3 (2018) was a security-driven rewrite that also got dramatically faster:
+
+<SequenceDiagram
+  actors={["Client", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "ClientHello — cipher suites + key share (ephemeral DH)" },
+    { from: 1, to: 0, label: "ServerHello — chosen suite + key share; {certificate, signature, Finished} encrypted", dashed: true },
+    { from: 0, to: 1, label: "Finished — both sides hold identical keys" },
+    { from: 0, to: 1, label: "Application data (encrypted)" },
+  ]}
+  caption="One round trip: the client guesses a key share in its first message, the server completes the exchange and authenticates — all in one flight each way."
+/>
+
+The decisive moves: the client sends its **key share immediately** (no separate negotiation
+round), so keys exist after one exchange; the server's certificate is **encrypted** (1.2 sent it
+in clear); and only forward-secret, ephemeral key exchanges survive — static-RSA key transport,
+renegotiation, compression, and the weak ciphers behind a decade of attacks (BEAST, CRIME,
+POODLE, FREAK) were *deleted from the protocol*, not merely deprecated. **Resumption** uses a
+pre-shared key from a prior session; **0-RTT** rides data in the first packet — fast, but
+replayable, so it's for idempotent requests only.
+
+## Forward secrecy: the property worth understanding
+
+<Callout variant="insight" title="Why ephemeral keys matter">
+TLS 1.3 derives each session's keys from a **fresh, ephemeral** Diffie-Hellman exchange and throws
+the private values away afterward. So even if the server's long-term private key is stolen *later*,
+yesterday's captured traffic stays unreadable — there's no master key that decrypts the past. This
+is **forward secrecy**, and it's why "harvest now, decrypt later" adversaries can't simply wait for
+a key compromise. (It's also why the post-quantum migration is urgent for the key *exchange*
+specifically — hybrid X25519+ML-KEM is rolling out now.)
+</Callout>
+
+## PKI: the trust you're actually leaning on
+
+A certificate is a signed claim — "this public key belongs to example.com" — vouched for by a
+**Certificate Authority** your system already trusts (the root store shipped with your OS/browser).
+Validation walks a **chain** from the server's cert through intermediates to a trusted root,
+checking signatures, validity dates, hostname match, and revocation. The ecosystem's hard-won
+improvements: **Certificate Transparency** (every cert logged in public append-only logs, so
+mis-issuance is detectable — Chrome requires it), short-lived certs and **ACME/Let's Encrypt**
+(automation killed the "expired cert" outage and the excuse not to encrypt), and **OCSP
+stapling** (the server proves its cert isn't revoked, sparing a privacy-leaking call to the CA).
+
+<Callout variant="warning" title="The failures you'll actually meet">
+Expired certificate (automate renewal — ACME). Hostname mismatch (cert for `www` but not apex, or
+vice versa). Incomplete chain — the server forgot to send intermediates, so it works in browsers
+that cache them and fails in `curl` (the maddening "works for me" bug). Clock skew making a valid
+cert look expired. Mixed TLS versions / no common cipher → handshake failure. `openssl s_client
+-connect host:443` shows you the served chain and the negotiated everything — the first tool to
+reach for.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "An attacker records your TLS 1.3 traffic today and steals the server's private key next year. Can they read the recording?",
+      options: [
+        "Yes — the private key decrypts everything",
+        "No — ephemeral-DH forward secrecy means each session's keys are independent of the long-term key and were discarded",
+        "Only if they also have the certificate",
+      ],
+      answer: 1,
+      explanation:
+        "TLS 1.3 mandates ephemeral key exchange, so session keys can't be reconstructed from the long-term key. Forward secrecy is precisely the defense against later key compromise.",
+    },
+    {
+      q: "A site loads in Chrome but fails in curl with a verification error. Most likely cause?",
+      options: [
+        "Chrome ignores certificate errors",
+        "The server isn't sending intermediate certs; browsers cache them, curl doesn't — an incomplete chain",
+        "curl doesn't support TLS 1.3",
+      ],
+      answer: 1,
+      explanation:
+        "A common misconfiguration: the server presents only its leaf cert. Browsers often have intermediates cached from other sites and paper over it; a fresh client like curl can't build the chain.",
+    },
+  ]}
+/>

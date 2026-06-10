@@ -1,0 +1,109 @@
+export const sources = [
+  { label: "RFC 9000 — QUIC: A UDP-Based Multiplexed and Secure Transport", href: "https://www.rfc-editor.org/rfc/rfc9000.html" },
+  { label: "RFC 9001 — Using TLS to Secure QUIC", href: "https://www.rfc-editor.org/rfc/rfc9001.html" },
+  { label: "RFC 9002 — QUIC Loss Detection and Congestion Control", href: "https://www.rfc-editor.org/rfc/rfc9002.html" },
+  { label: "RFC 9114 — HTTP/3", href: "https://www.rfc-editor.org/rfc/rfc9114.html" },
+];
+
+## TCP, redesigned with hindsight
+
+QUIC is what you get when transport engineers take thirty years of TCP lessons and rebuild —
+in **user space**, **over UDP**, with **TLS 1.3 fused in**. Born at Google (deployed in Chrome
+from 2014), standardized in 2021 (deployed in Chrome from ~2013 as gQUIC), it now carries HTTP/3 — a quarter to a third of web traffic.
+Its four headline ideas each fix a specific TCP scar:
+
+| TCP's scar | QUIC's fix |
+| --- | --- |
+| Separate TCP + TLS handshakes (2–3 RTTs to first byte) | One combined handshake: **1 RTT** cold, **0-RTT** resumed |
+| One ordered stream → transport-level head-of-line blocking | **Independent streams** — loss in one never stalls another |
+| Connections die when your IP changes (Wi-Fi → cellular) | **Connection IDs** — the connection survives address changes |
+| Kernel + middlebox ossification freezes evolution | User-space + **encrypted headers** — nothing for middleboxes to grab |
+
+## How it works
+
+**Streams, not a stream.** A QUIC connection multiplexes many independent, ordered byte streams
+(client- or server-initiated, uni- or bidirectional). Stream 4 losing a packet delays only stream
+4 — the receiver delivers other streams' data immediately. HTTP/3 maps each request to its own
+stream, finally making multiplexing loss-proof.
+
+**The handshake is the TLS handshake.** QUIC doesn't run *over* TLS; it *embeds* TLS 1.3's key
+exchange in its own frames (RFC 9001). One flight each way negotiates transport parameters and
+keys together; with a remembered server, **0-RTT** lets the first flight carry application data —
+accepting replay risk, so 0-RTT is for idempotent requests only.
+
+**Almost everything is encrypted** — including most of the transport header itself (packet
+numbers, ACK frames, all control signaling). Where TCP's headers are a public bulletin board that
+middleboxes learned to read and meddle with (hence ossification), QUIC shows the network only what
+routing strictly needs: a connection ID and a few bits. This is a deliberate anti-ossification
+design: you can't grow dependent on what you can't see.
+
+**Loss recovery, modernized** (RFC 9002): packet numbers are **monotonic and never reused** —
+retransmitted data gets a fresh number, eliminating TCP's retransmission ambiguity (no Karn's
+kludge needed); ACKs carry rich ranges (SACK semantics by default) and the receiver's ack delay,
+making RTT estimates honest. Congestion control is pluggable — Reno-style by spec, CUBIC or BBR in
+practice.
+
+**Migration.** The connection is named by connection IDs, not the 4-tuple. Walk out of Wi-Fi
+coverage mid-download and the same connection continues over cellular after a path-validation
+round trip — the feature underlying seamless mobile video.
+
+<WorkedExample title="Counting the round trips to first byte">
+Cold connection to a new server, HTTPS:
+
+1. **TCP+TLS 1.3 (HTTP/2):** TCP handshake (1 RTT) → TLS handshake (1 RTT) → request → response:
+   first byte after **~3 RTTs** including the request flight.
+2. **QUIC (HTTP/3):** combined transport+crypto handshake (1 RTT) → request → response: **~2
+   RTTs**.
+3. **QUIC resumed with 0-RTT:** request rides the very first packet: **~1 RTT**.
+
+On a 100 ms mobile path, that's 300 → 200 → 100 ms before the server even starts answering — why
+the mobile-heavy platforms (Google, Meta, Cloudflare) drove adoption.
+</WorkedExample>
+
+## Operational notes
+
+- **Port 443/UDP**; clients discover HTTP/3 support via the `Alt-Svc` header or DNS HTTPS records,
+  and fall back to TCP seamlessly — networks that block UDP 443 just get HTTP/2.
+- **CPU cost is real**: user-space packet processing and per-packet crypto historically ran hotter
+  than kernel TCP; hardware offloads (and kernel io_uring/GSO tricks) keep closing the gap.
+- **Debugging changed**: encrypted transport means tcpdump shows opaque blobs. The ecosystem's
+  answer is **qlog** — endpoint-side structured tracing — plus the `SSLKEYLOGFILE` decryption
+  workflow in Wireshark.
+- The **unreliable-datagram extension** (RFC 9221) gives real-time media a TCP-free, congestion-
+  controlled raw mode inside a QUIC connection — the basis of WebTransport and MASQUE proxying.
+
+<Callout variant="security" title="The amplification guard">
+A spoofed-source handshake could turn QUIC servers into DDoS reflectors, so the spec hard-limits
+servers to **3× the bytes received** from an unvalidated address; the **Retry** mechanism forces a
+round trip proving the client owns its address before the server commits state or bandwidth —
+UDP's spoofing lesson, designed in from day one.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "How does QUIC eliminate TCP's retransmission ambiguity (the problem Karn's algorithm works around)?",
+      options: [
+        "It never retransmits",
+        "Packet numbers are never reused — a retransmission gets a new number, so an ACK names exactly one transmission",
+        "It measures RTT only on the handshake",
+      ],
+      answer: 1,
+      explanation:
+        "TCP retransmits the same sequence number, so an ACK can't say which copy it acknowledges. QUIC's monotonic packet numbers make every ACK unambiguous, giving clean RTT samples.",
+    },
+    {
+      q: "Why does QUIC encrypt even its transport headers?",
+      options: [
+        "Performance — encrypted headers compress better",
+        "Anti-ossification: what middleboxes can't inspect they can't grow dependent on, keeping the protocol evolvable",
+        "UDP requires it",
+      ],
+      answer: 1,
+      explanation:
+        "TCP's visible headers let decades of middleboxes calcify its wire format. QUIC shows the network only connection IDs and a few bits, so future versions can change everything else without breaking the path.",
+    },
+  ]}
+/>

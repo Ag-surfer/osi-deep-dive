@@ -1,0 +1,109 @@
+export const sources = [
+  { label: "RFC 8259 — JSON", href: "https://www.rfc-editor.org/rfc/rfc8259.html" },
+  { label: "Protocol Buffers — Language Guide", href: "https://protobuf.dev/programming-guides/proto3/" },
+  { label: "ITU-T X.690 — ASN.1 Encoding (BER/DER)", href: "https://www.itu.int/rec/T-REC-X.690" },
+];
+
+## Turning structure into bytes
+
+In memory, data is a graph of objects connected by pointers — meaningless on another machine.
+**Serialization** flattens it into a byte stream the wire can carry and the far side can rebuild.
+This is the Presentation layer's defining job, and the format you pick is a real engineering
+decision with downstream consequences for speed, size, evolvability, debuggability, and security.
+
+## The fundamental axes
+
+Every format trades along the same dimensions:
+
+- **Text vs binary**: human-readable and debuggable (curl, log, eyeball) vs compact and fast.
+- **Self-describing vs schema-required**: does the bytestream carry its own field names (JSON), or
+  must both sides share a schema to interpret it (protobuf)?
+- **Schema evolution**: can you add a field without breaking old readers? — the property that
+  decides whether you can deploy services independently.
+
+| Format | Shape | Sweet spot | Cost |
+| --- | --- | --- | --- |
+| **JSON** | Text, self-describing | APIs, config, the web's lingua franca | Verbose; no schema; numbers are floats (precision traps) |
+| **Protocol Buffers** | Binary, schema-first | Internal RPC (gRPC), high-volume services | Opaque without the `.proto`; codegen step |
+| **MessagePack / CBOR** | Binary, self-describing | "JSON but smaller" — IoT, caches | Still no schema enforcement |
+| **Avro** | Binary, schema-with-data | Big-data pipelines (Kafka, Hadoop) | Schema-registry machinery |
+| **ASN.1 (DER)** | Binary, formal | X.509 certs, LDAP, telecom, 5G | Famously intricate to parse safely |
+
+## Why protobuf is small: field numbers and varints
+
+<WorkedExample title="Encoding a number in protobuf vs JSON">
+A message `{ "id": 300 }` where `id` is field 1:
+
+1. **JSON**: the literal text `{"id":300}` — 10 bytes, and the field *name* travels every time.
+2. **Protobuf**: a one-byte **tag** packing the field number (1) and wire type (varint) =
+   `0x08`, then 300 as a **varint** = `0xAC 0x02` (7 bits per byte, low byte first). Three bytes,
+   and the name `id` lives only in the shared `.proto`.
+
+The schema is doing the compression: both sides agree field 1 is `id`, so the wire carries
+*numbers, not names*. That's also why a protobuf payload is meaningless in a packet capture
+without the schema — the debuggability you traded away.
+</WorkedExample>
+
+## Schema evolution: the property that lets teams ship
+
+The reason protobuf dominates microservices isn't just size — it's **forward/backward
+compatibility done right**. Rules that let a hundred services deploy on their own schedules:
+
+- **Never reuse or renumber a field tag** — the tag *is* the field's identity; reuse silently
+  misinterprets old data. (protobuf lets you `reserve` retired numbers to enforce this.)
+- **New fields are optional/defaulted** — old readers skip unknown tags; new readers see defaults
+  for absent fields. Add freely; never require.
+- Adding a field is safe both directions; *removing* or *changing a type* is the breaking change.
+
+JSON evolves too — readers ignore unknown keys — but with no schema there's nothing stopping a
+typo'd key or a string-where-number-expected from sailing through to a runtime explosion. That's
+the self-describing-vs-schema trade made concrete.
+
+## Endianness, the oldest serialization bug
+
+Multi-byte numbers have two byte orders — **big-endian** (network byte order, how humans write)
+and **little-endian** (x86/ARM memory). Hand-rolled binary protocols that forget `htons`/`ntohl`
+read port 80 (`0x0050`) as 20480 (`0x5000`) — every network programmer's once-in-a-career bug.
+Real formats spare you: JSON sidesteps it with text, protobuf fixes little-endian and varint
+ordering in the spec. The lesson: representation must be *agreed*, and good formats make the
+agreement for you.
+
+<Callout variant="security" title="Deserialization is an attack surface">
+Parsing untrusted input is dangerous in proportion to how much the format can express.
+**Insecure deserialization** — reconstructing language-native objects from attacker bytes (Java
+`readObject`, Python `pickle`, PHP `unserialize`) — is a perennial top-tier web vulnerability,
+because the "data" can encode object graphs that execute code on instantiation. **Rules:** never
+deserialize untrusted data into live objects; prefer data-only formats (JSON/protobuf) over
+object-graph ones; validate against a schema; cap sizes and nesting depth (a "billion laughs"
+XML/JSON bomb is a DoS in a few hundred bytes). ASN.1 parsers specifically have a long CVE history
+— hand-written DER parsing is a minefield, which is why everyone uses vetted libraries.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why is a Protocol Buffers payload so much smaller than the equivalent JSON?",
+      options: [
+        "It compresses the bytes with gzip",
+        "The shared schema means field names never travel — the wire carries numbered tags and varint-encoded values",
+        "It drops fields that are zero",
+      ],
+      answer: 1,
+      explanation:
+        "Both sides agree (via the .proto) that field 1 is 'id', so only a compact tag + value crosses the wire. The schema is the compression — at the cost of needing it to read anything.",
+    },
+    {
+      q: "What's the cardinal rule of evolving a protobuf schema?",
+      options: [
+        "Always alphabetize fields",
+        "Never reuse or renumber field tags — the number is the field's identity, and reuse silently corrupts old data",
+        "Every field must be required",
+      ],
+      answer: 1,
+      explanation:
+        "Backward/forward compatibility rests on tag stability: old readers skip unknown tags and default absent ones, but a reused number is read as the wrong field. (Requiring fields is the opposite of safe evolution.)",
+    },
+  ]}
+/>

@@ -1,0 +1,101 @@
+export const sources = [
+  { label: "IEEE 802.3 — Ethernet (all clauses)", href: "https://standards.ieee.org/ieee/802.3/" },
+  { label: "Tanenbaum & Wetherall, Computer Networks, Ch. 2", href: "https://www.pearson.com/" },
+];
+
+## Same frame, a thousandfold faster
+
+The Ethernet *frame* barely changed from 1980 to today; the **physical layer underneath it** was
+rebuilt over and over to go from 10 Mb/s on a shared coax bus to **800 Gb/s** on parallel fiber —
+a five-order-of-magnitude climb achieved by pulling the same handful of Layer-1 levers harder each
+generation. This page is about those levers: line coding, modulation, and lanes.
+
+## The naming code, decoded
+
+`1000BASE-T` looks cryptic and is actually a precise spec: **speed–signaling–medium**.
+
+| Name | Speed | Medium | The Layer-1 story |
+| --- | --- | --- | --- |
+| 10BASE-T | 10 Mb/s | 2 twisted pairs | Manchester coding — simple, self-clocking, 2× bandwidth cost |
+| 100BASE-TX | 100 Mb/s | 2 pairs | 4B/5B + MLT-3 — denser coding to hit 100M on the same cable |
+| **1000BASE-T** | 1 Gb/s | **4 pairs** | All four pairs at once, **PAM-5**, echo cancellation, bidirectional per pair |
+| 10GBASE-T | 10 Gb/s | 4 pairs (Cat 6a) | PAM-16 + heavy DSP; runs hot, why fiber often wins past 10G |
+| 100GBASE-SR4 | 100 Gb/s | parallel fiber | 4 lanes × 25G; lanes are how you scale past one stream's limit |
+
+The `T` = twisted pair, `S`/`L` = short/long fiber, the trailing number = lane count. Decoding the
+name tells you the cabling, reach, and roughly the era.
+
+## The levers, and why they have ceilings
+
+Three knobs raise the bitrate, each bounded by [Nyquist and Shannon](/layers/physical/):
+
+1. **Symbol rate (baud)** — more symbols per second, capped by the channel's bandwidth and how
+   fast the electronics can cleanly switch.
+2. **Bits per symbol (modulation density)** — PAM-5, PAM-16: more voltage levels per symbol, but
+   the levels crowd together and need ever-better signal-to-noise to tell apart. This is why
+   10GBASE-T over copper demands Cat 6a and burns power on DSP — it's fighting noise to keep the
+   levels distinct.
+3. **Parallel lanes** — when one stream hits its ceiling, run several. 1000BASE-T uses all four
+   copper pairs; 100G/400G fiber uses multiple wavelengths or fibers. Most modern speed jumps are
+   really lane-count jumps.
+
+<WorkedExample title="Why gigabit copper needs all four pairs (and why a damaged one drops you to 100M)">
+1. 100BASE-TX moved 100 Mb/s over **2** pairs.
+2. 1000BASE-T needed 10× that on the same Cat 5e. Rather than one impossibly fast pair, it spreads
+   250 Mb/s across **4** pairs simultaneously — and transmits in *both directions on each pair at
+   once* (hybrid + echo cancellation), a DSP feat.
+3. So if a re-termination breaks one pair, gigabit can't form — autonegotiation falls back to
+   100BASE-TX, which only needs two good pairs. The classic "why did this link come up at 100?"
+   ticket is a dead pair, and it's a direct consequence of the lane math.
+</WorkedExample>
+
+## The features that ship with the PHY
+
+- **Autonegotiation**: link partners exchange capability pulses and settle on the best common
+  speed/duplex — the source of the canonical **duplex-mismatch** misery when one side is hard-coded
+  (forced full-duplex vs auto → the auto side picks half → late collisions, ~working-but-awful
+  throughput).
+- **Power over Ethernet (802.3af/at/bt)**: up to ~90 W of DC riding the same cable as data — APs,
+  cameras, and phones powered by their network drop. A Layer-1 capability with outsized real-world
+  reach.
+- **Auto-MDI-X**: the PHY swaps transmit/receive pairs itself, which is why crossover cables
+  vanished.
+- **SFP/QSFP transceivers**: the PHY became *modular* — swap a copper, short-fiber, or long-fiber
+  optic into the same cage, decoupling the switch from the medium.
+
+<Callout variant="insight" title="The pattern across 40 years">
+Every Ethernet generation is the same three levers — faster symbols, denser modulation, more lanes
+— plus more DSP to claw signal out of noise. The frame on top never noticed. It's the cleanest
+illustration of *why* the OSI model splits Layer 1 from Layer 2: the link's job ('deliver this
+frame') stayed constant while its physics were reinvented underneath, and the layer boundary is
+exactly what let that happen.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "In '1000BASE-T', what does each part mean?",
+      options: [
+        "1000 cables, BASE station, Type T",
+        "1000 Mb/s, baseband signaling, twisted-pair copper",
+        "1000 meters, BASE-T modulation",
+      ],
+      answer: 1,
+      explanation:
+        "The convention is speed–signaling–medium: 1000 Mb/s, BASE = baseband (the whole medium carries one signal, no RF carrier), T = twisted pair. SR/LR would be short/long-reach fiber.",
+    },
+    {
+      q: "Why does denser modulation (more bits per symbol) eventually stop helping on copper?",
+      options: [
+        "The cable runs out of pairs",
+        "More voltage levels sit closer together, so they need ever-higher SNR to distinguish — noise sets the ceiling (Shannon)",
+        "Autonegotiation forbids it",
+      ],
+      answer: 1,
+      explanation:
+        "Packing more levels per symbol raises the bitrate but shrinks the gap between levels; past a point noise blurs them. That SNR wall is exactly Shannon's capacity limit, and why 10G copper needs Cat 6a and heavy DSP.",
+    },
+  ]}
+/>

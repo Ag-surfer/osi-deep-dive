@@ -7,6 +7,7 @@ import { LAYERS_TOP_DOWN } from "@/lib/layers";
 
 const TOP = [
   { href: "/", label: "Home" },
+  { href: "/protocols/", label: "Protocol Deep Dives" },
   { href: "/journey/", label: "Packet Journey" },
   { href: "/anatomy/", label: "Packet Anatomy" },
   { href: "/glossary/", label: "Glossary & RFCs" },

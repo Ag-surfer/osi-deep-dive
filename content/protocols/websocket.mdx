@@ -1,0 +1,99 @@
+export const sources = [
+  { label: "RFC 6455 — The WebSocket Protocol", href: "https://www.rfc-editor.org/rfc/rfc6455.html" },
+  { label: "RFC 8441 — Bootstrapping WebSockets with HTTP/2", href: "https://www.rfc-editor.org/rfc/rfc8441.html" },
+];
+
+## Escaping request/response
+
+HTTP is a client asks, server answers protocol — fine for documents, hopeless for chat, live
+dashboards, collaborative editors, multiplayer games, and trading tickers, where the **server**
+needs to push the moment something happens. Before WebSocket (2011), the web faked it with ugly
+hacks — polling (ask every N seconds, wasteful and laggy) and long-polling (hold a request open
+until news arrives, then immediately re-open). WebSocket replaced all of it with a genuine
+**persistent, full-duplex, bidirectional** channel — and it's the clearest example of the OSI
+**Session layer** alive in the modern web: explicit establishment, a long-lived managed dialogue,
+and orderly teardown.
+
+## The upgrade dance
+
+WebSocket's clever trick is that it *starts* as HTTP, so it sails through ports 80/443, firewalls,
+and proxies that only trust web traffic:
+
+<SequenceDiagram
+  actors={["Browser", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "GET /chat — Upgrade: websocket, Sec-WebSocket-Key" },
+    { from: 1, to: 0, label: "101 Switching Protocols, Sec-WebSocket-Accept", dashed: true },
+    { from: 0, to: 1, label: "— connection is now WebSocket frames, both directions —" },
+    { from: 1, to: 0, label: "server pushes whenever it likes", dashed: true },
+    { from: 0, to: 1, label: "Close frame → orderly shutdown" },
+  ]}
+  caption="A WebSocket begins as an HTTP request asking to Upgrade; after 101 Switching Protocols, the TCP connection is repurposed for symmetric framed messages."
+/>
+
+After the `101`, HTTP is gone — the same TCP connection now carries lightweight **WebSocket
+frames** (a few bytes of header: opcode, length, mask) in either direction, any time. The
+`Sec-WebSocket-Key`/`Accept` exchange isn't security — it's a sanity check that the server truly
+understands WebSocket and a cache isn't replaying an old response.
+
+## The framing details that bite
+
+- **Messages vs frames**: an application message can fragment across frames; libraries reassemble,
+  but text vs binary (opcode 0x1 vs 0x2) matters — sending a buffer as text mangles it.
+- **Ping/pong** (opcodes 0x9/0xA) are the built-in keepalive — essential, because NATs and proxies
+  silently reap idle connections in minutes, and a dead WebSocket often *looks* alive until the
+  next write fails.
+- **Client-to-server frames are masked** with a random key — a defense not against eavesdroppers
+  (use `wss://` for that) but against *cache poisoning* of intermediaries that might misread frame
+  bytes as a crafted HTTP request.
+- **WebSocket over HTTP/2** (RFC 8441) tunnels the stream inside an HTTP/2 connection, so it
+  shares multiplexing instead of monopolizing a TCP connection.
+
+<Callout variant="warning" title="What WebSocket doesn't give you">
+It's a raw bidirectional pipe — no automatic reconnection, no message delivery guarantees beyond
+TCP's, no built-in request/response correlation, no backpressure semantics. Production systems add
+all of it themselves, which is why higher-level layers exist on top: **Socket.IO** (reconnect +
+fallback + rooms), and increasingly **Server-Sent Events** for the common server-push-only case
+(simpler, auto-reconnecting, but one-directional). Reach for WebSocket when you genuinely need the
+*client* pushing too.
+</Callout>
+
+## Security checklist
+
+<Callout variant="security" title="The WebSocket-specific footguns">
+**Always `wss://`** (TLS) — `ws://` is plaintext and downgradeable. **Check the `Origin` header**:
+WebSocket isn't bound by the same-origin policy and doesn't send CORS preflights, so a malicious
+site can open a socket to your server riding the user's cookies — **Cross-Site WebSocket
+Hijacking**. Defend by validating `Origin` server-side and using per-connection tokens, not
+ambient cookie auth. And rate-limit/authenticate at connect time: a persistent connection is a
+held resource, so unauthenticated WebSocket endpoints are a tidy DoS target.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "How does a WebSocket connection get through firewalls that only allow web traffic?",
+      options: [
+        "It uses a special WebSocket port",
+        "It begins as an HTTP request with Upgrade: websocket on ports 80/443, then switches the same connection to WebSocket frames after 101",
+        "It tunnels inside DNS",
+      ],
+      answer: 1,
+      explanation:
+        "The HTTP Upgrade handshake means the connection looks like ordinary web traffic to intermediaries until the 101 Switching Protocols response repurposes it — the deployment trick that made WebSocket viable.",
+    },
+    {
+      q: "Why validate the Origin header on a WebSocket server?",
+      options: [
+        "To enable compression",
+        "WebSocket bypasses the same-origin policy and sends cookies, so without an Origin check a malicious site can hijack the user's authenticated connection (CSWSH)",
+        "It's required by the TCP spec",
+      ],
+      answer: 1,
+      explanation:
+        "Cross-Site WebSocket Hijacking exploits the lack of CORS on WebSocket. Server-side Origin validation plus per-connection tokens (not ambient cookies) is the defense.",
+    },
+  ]}
+/>

@@ -18,7 +18,10 @@
         "http://localhost:9009/troubleshoot/",
         "http://localhost:9009/models/",
         "http://localhost:9009/modern/",
-        "http://localhost:9009/wireless/"
+        "http://localhost:9009/wireless/",
+        "http://localhost:9009/protocols/",
+        "http://localhost:9009/protocols/bgp/",
+        "http://localhost:9009/protocols/tcp/"
       ],
       "numberOfRuns": 1
     },

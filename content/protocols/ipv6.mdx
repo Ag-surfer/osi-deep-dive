@@ -1,0 +1,113 @@
+export const sources = [
+  { label: "RFC 8200 — Internet Protocol, Version 6", href: "https://www.rfc-editor.org/rfc/rfc8200.html" },
+  { label: "RFC 4861 — Neighbor Discovery for IPv6", href: "https://www.rfc-editor.org/rfc/rfc4861.html" },
+  { label: "RFC 4862 — IPv6 Stateless Address Autoconfiguration", href: "https://www.rfc-editor.org/rfc/rfc4862.html" },
+  { label: "RFC 4291 — IPv6 Addressing Architecture", href: "https://www.rfc-editor.org/rfc/rfc4291.html" },
+];
+
+## The do-over
+
+IPv4's 32 bits ran out; IPv6's answer is 128 bits — 3.4 × 10³⁸ addresses, enough to never think
+about scarcity again. But the redesign went deeper than width: a simplified header for faster
+forwarding, fragmentation pushed to end hosts, autoconfiguration as the default, and the
+restoration of the **end-to-end principle** that NAT broke. A quarter-century on, roughly half of
+traffic to major services arrives over IPv6 — the transition is real, just geologically paced.
+
+## Addressing, the part worth memorizing
+
+`2001:0db8:0000:0000:0000:0000:0000:0001` compresses to `2001:db8::1` — drop leading zeros, and
+collapse **one** run of zero groups to `::`. The structure that matters:
+
+| Range | Meaning |
+| --- | --- |
+| `2000::/3` | Global unicast — the public internet |
+| `fe80::/10` | **Link-local** — auto-generated on every interface, never routed; where NDP and OSPFv3 live |
+| `fc00::/7` (ULA) | Private-ish space, like RFC 1918 — but *not* meant to imply NAT |
+| `ff00::/8` | Multicast (replaces broadcast entirely — `ff02::1` = all nodes on link) |
+| `::1` | Loopback |
+
+A standard site gets a `/48`; a LAN is a `/64` — and the 64-bit interface half is what makes
+SLAAC's self-assigned addresses statistically collision-free. **Every interface holds several
+addresses at once** (link-local + one or more globals) — a mental-model shift from IPv4's
+one-address habit.
+
+## The header: less is more
+
+<NamedHeader id="ipv6" />
+
+Three deletions tell the design story:
+
+- **No header checksum.** Layer 2 (FCS) and Layer 4 (TCP/UDP checksums) already cover it; routers
+  stop recomputing a checksum every hop just because TTL — now renamed **Hop Limit** — changed.
+- **No in-network fragmentation.** Routers too small for a packet drop it and send ICMPv6 *Packet
+  Too Big*; only the source may fragment. Path MTU discovery isn't an optimization anymore — it's
+  mandatory, which is why **filtering ICMPv6 breaks IPv6** outright.
+- **No options field** — replaced by chainable **extension headers** (routing, fragmentation,
+  IPsec) that sit between the fixed 40-byte header and the payload, examined only by the nodes
+  that need them.
+
+## NDP and SLAAC: the plug-and-play stack
+
+IPv6 replaced both ARP and (optionally) DHCP with the **Neighbor Discovery Protocol** — five
+ICMPv6 message types doing the link's housekeeping over efficient multicast:
+
+1. **Router Advertisement** (RA): routers announce "this link's prefix is `2001:db8:1::/64`, I'm a
+   default gateway."
+2. The host generates an **interface identifier** (modern stacks use random, rotating *privacy
+   addresses* rather than MAC-derived EUI-64 — your hardware address shouldn't follow you around
+   the internet).
+3. **Duplicate Address Detection**: a Neighbor Solicitation for its own tentative address; silence
+   means it's yours.
+4. **Neighbor Solicitation/Advertisement** then do ARP's old job — IP-to-MAC resolution — for the
+   life of the link.
+
+Flags in the RA select the regime: pure SLAAC, SLAAC + DHCPv6 for extras like DNS (the **O** flag),
+or managed DHCPv6 (**M**) where the enterprise wants leases and logs.
+
+<Callout variant="warning" title="Dual-stack reality">
+The transition mechanism that won is the boring one: **dual stack** — run both protocols, prefer
+IPv6 (per *Happy Eyeballs*, RFC 8305: race connections on both, use whichever answers first, so
+broken IPv6 never strands users). Translation lives at carrier scale: **NAT64/DNS64** lets
+IPv6-only mobile networks (most cellular carriers today) reach the IPv4 internet; **464XLAT**
+papers over apps with IPv4 literals. The endgame is IPv6-only networks emulating IPv4 at the edge —
+already standard practice on phone networks.
+</Callout>
+
+## Security notes
+
+<Callout variant="security" title="Same attacks, new spelling">
+NDP inherits ARP's credulity — rogue-RA (a host announcing itself as the router) is ARP spoofing's
+IPv6 twin, with **RA Guard** as the switch-side defense. The "NAT was our firewall" worry has a
+real answer: stateful firewalls provide the same default-deny inbound posture without breaking
+end-to-end. And don't forget the audit blind spot: IPv6 is on by default — networks that "don't run
+IPv6" often run it unmanaged, link-locally, where no ACLs are watching.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why does filtering all ICMPv6 break IPv6 networks?",
+      options: [
+        "ICMPv6 carries the encryption keys",
+        "NDP (address resolution, router discovery) and mandatory Path MTU discovery are all ICMPv6",
+        "It doesn't — ICMP is optional",
+      ],
+      answer: 1,
+      explanation:
+        "ICMPv6 isn't just ping: ARP's replacement (NS/NA), router discovery (RA), and Packet Too Big — required because routers never fragment — all ride on it. Filter it and the link stops functioning.",
+    },
+    {
+      q: "How does a SLAAC host ensure its self-generated address is unique?",
+      options: [
+        "It asks the DHCPv6 server",
+        "Duplicate Address Detection — a Neighbor Solicitation for its own tentative address; silence means success",
+        "Uniqueness is guaranteed by the 128-bit space",
+      ],
+      answer: 1,
+      explanation:
+        "Before using a tentative address, the host multicasts an NS asking 'anyone using this?'. Any answer aborts the assignment. Statistics make collisions unlikely; DAD makes them detected.",
+    },
+  ]}
+/>

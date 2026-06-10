@@ -1,0 +1,105 @@
+export const sources = [
+  { label: "RFC 1034 — Domain Names: Concepts and Facilities", href: "https://www.rfc-editor.org/rfc/rfc1034.html" },
+  { label: "RFC 1035 — Domain Names: Implementation", href: "https://www.rfc-editor.org/rfc/rfc1035.html" },
+  { label: "RFC 4033 — DNSSEC Introduction", href: "https://www.rfc-editor.org/rfc/rfc4033.html" },
+  { label: "RFC 8484 — DNS over HTTPS", href: "https://www.rfc-editor.org/rfc/rfc8484.html" },
+];
+
+## A database wearing a phone book costume
+
+Calling DNS "the internet's phone book" undersells it: it's a **globally distributed, delegated,
+eventually-consistent database** that answers ~quadrillions of queries a year with millisecond
+latency, administered by millions of independent parties who never coordinate. Every connection
+starts here — which is why its failures masquerade as total outages, and why "it's always DNS" is
+both a joke and a statistics lesson.
+
+## The architecture: delegation all the way down
+
+The namespace is a tree (`www.example.com.` — note the implicit root dot), and **authority is
+delegated along it**: the **root** (13 named servers, over a thousand anycast instances) delegates
+`.com` to the TLD servers; `.com` delegates `example.com` to whoever the registrar recorded;
+your **authoritative** servers answer for your zone. Nobody holds the whole database — each zone's
+operator holds their slice, and **NS records** are the pointers between slices.
+
+Resolution splits roles: your device's **stub resolver** asks a **recursive resolver** (your
+ISP's, or 8.8.8.8/1.1.1.1), which walks the tree — root → TLD → authoritative — **iteratively**,
+then caches everything it learned. The cache is the whole performance story: the root isn't
+consulted per lookup; it's consulted when the resolver's `.com` NS entry (TTL: days) expires.
+
+## The records that run the world
+
+| Type | Maps name to… | Notes |
+| --- | --- | --- |
+| A / AAAA | IPv4 / IPv6 address | The workhorses |
+| CNAME | Another name | Alias; cannot coexist with other data at the same name (the apex problem) |
+| MX | Mail server + preference | Why email survives server moves |
+| TXT | Arbitrary text | Where SPF/DKIM/DMARC and domain-ownership proofs live |
+| NS | The zone's authoritative servers | The delegation mechanism itself |
+| SOA | Zone metadata | Serial, refresh, and the **negative-caching TTL** |
+| PTR | Address to name (reverse) | Mail-server reputation checks |
+| SRV / HTTPS | Service location, ports, ALPN | HTTPS records are how clients discover HTTP/3 |
+
+**TTLs are the operational control surface.** Long TTLs absorb load and survive outages; short
+ones enable fast failover at the price of constant queries. The migration ritual — lower TTL to
+60 s a day before, change the record, raise it after — exists because *caches obey the TTL that
+was on the record when they fetched it*. And **negative caching** (SOA-governed) means NXDOMAIN
+answers linger too: a typo'd record stays broken for that long after you fix it.
+
+<WorkedExample title="Debugging with dig like you mean it">
+`dig +trace www.example.com` reproduces the resolver's walk: root referral → `.com` referral →
+authoritative answer. Three follow-ups localize any DNS incident:
+
+1. `dig @1.1.1.1 www.example.com` vs `dig @<your-resolver>` — records vs resolver problem.
+2. `dig @ns1.example.com www.example.com` — ask the authoritative server directly: is the zone
+   itself right?
+3. Check the `flags`: `aa` = authoritative answer; missing `ra` = that server won't recurse for
+   you; `SERVFAIL` vs `NXDOMAIN` distinguish "resolution broke" from "name doesn't exist."
+</WorkedExample>
+
+## Transport and privacy: the modern shifts
+
+Classic DNS is UDP/53 with TCP fallback (the **TC** truncation bit) — and TCP was always required
+for zone transfers. Today three encrypted transports are mainstream: **DoT** (TLS on 853), **DoH**
+(HTTPS — indistinguishable from web traffic, RFC 8484), and DNS over QUIC. They move trust rather
+than remove it: your ISP can no longer watch queries, the DoH provider now can. Enterprise
+security teams have the mirrored complaint — DoH bypasses their monitoring — hence "canary
+domains" and managed-browser policies.
+
+<Callout variant="security" title="Poisoning, DNSSEC, and the gap nobody closed">
+**Cache poisoning** (Kaminsky, 2008): race the real answer with forged responses; if your guess of
+the query ID lands first, the resolver caches your lie for the TTL. Mitigations raised the bar
+(random IDs + random source ports); **DNSSEC** closes it cryptographically — zones sign records
+(RRSIG), parents publish child key digests (DS), validators walk the chain from the root. The
+catch: deployment is a minority of zones, validation failures look like outages, and DNSSEC signs
+*authenticity, not privacy* — it proves the answer is genuine while doing nothing to hide the
+question. Privacy is DoH/DoT's job; the two are complements, not rivals.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "You fixed a typo'd DNS record, but some users still see the old value an hour later. Why?",
+      options: [
+        "DNS requires a server restart",
+        "Resolvers cache by the TTL attached when they fetched — old data lives until each cache's copy expires",
+        "DNSSEC blocks changes for 24 hours",
+      ],
+      answer: 1,
+      explanation:
+        "DNS is eventually consistent by design: there's no invalidation broadcast. Caches age out independently — which is why planned changes start with lowering the TTL in advance.",
+    },
+    {
+      q: "What does DNSSEC actually provide?",
+      options: [
+        "Encrypted queries so observers can't see what you look up",
+        "Cryptographic proof that answers are authentic and unmodified — via a signature chain from the root",
+        "Faster resolution through signed caches",
+      ],
+      answer: 1,
+      explanation:
+        "DNSSEC is integrity/authenticity (RRSIG/DS/DNSKEY chain), defeating cache poisoning. Query privacy is a different problem, solved by DoT/DoH.",
+    },
+  ]}
+/>

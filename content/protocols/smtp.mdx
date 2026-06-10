@@ -1,0 +1,115 @@
+export const sources = [
+  { label: "RFC 5321 — Simple Mail Transfer Protocol", href: "https://www.rfc-editor.org/rfc/rfc5321.html" },
+  { label: "RFC 7208 — SPF", href: "https://www.rfc-editor.org/rfc/rfc7208.html" },
+  { label: "RFC 6376 — DKIM", href: "https://www.rfc-editor.org/rfc/rfc6376.html" },
+  { label: "RFC 7489 — DMARC", href: "https://www.rfc-editor.org/rfc/rfc7489.html" },
+];
+
+## Federation that actually federated
+
+Email is the internet's oldest still-thriving decentralized application: anyone can run a server,
+and mail flows between organizations with no central operator — 1982's architecture carrying
+hundreds of billions of messages a day. SMTP is its delivery engine: a **store-and-forward push**
+protocol where each hop takes custody, queues, and retries for days. (Reading mail is the pull
+side — IMAP — and the division of labor is the first thing to get straight.)
+
+## The conversation
+
+SMTP is humane plaintext — you can speak it by hand:
+
+```
+220 mail.example.com ESMTP
+EHLO sender.example.org
+250-mail.example.com [capabilities: STARTTLS, SIZE, 8BITMIME…]
+MAIL FROM:<alice@example.org>
+250 OK
+RCPT TO:<bob@example.com>
+250 OK
+DATA
+354 Start mail input; end with <CRLF>.<CRLF>
+From: Alice <alice@example.org>
+Subject: Hello
+
+The message body.
+.
+250 OK: queued as 4XyZ12
+```
+
+Two details there carry most of email's complexity. First, **the envelope is not the header**:
+`MAIL FROM`/`RCPT TO` (the envelope, what servers route on) are independent of the `From:`/`To:`
+header lines users see — mailing lists, BCC, and most spoofing all live in that gap. Second, the
+**reply codes** (2xx accepted, 4xx temporary — retry later, 5xx permanent — bounce) drive the
+queueing behavior that makes email resilient: a dead server means delay, not loss.
+
+The journey: your client **submits** on port **587** (authenticated, TLS) to your provider's MTA;
+that MTA looks up the recipient domain's **MX records** and relays on port **25** to theirs; the
+recipient pulls it later via IMAP (993). Port 465 survives as implicit-TLS submission; port 25 is
+inter-server only (ISPs block it outbound from consumer space precisely to choke spam-bot direct
+delivery).
+
+## MIME and the 7-bit inheritance
+
+SMTP moves 7-bit ASCII lines. Everything else — attachments, HTML, emoji, non-Latin scripts —
+rides **MIME**: typed body parts (`Content-Type: multipart/mixed`), Base64 transfer encoding
+(hence attachments inflating ~33%), and encoded headers. A modern message is a MIME tree the
+protocol itself never looks inside.
+
+## The authentication retrofit
+
+<Callout variant="security" title="SPF + DKIM + DMARC, in one breath each">
+SMTP shipped with zero sender authentication — anyone could claim to be anyone, and for two
+decades they did. The retrofit arrived as three DNS-published mechanisms: **SPF** — "these IPs may
+send mail whose *envelope* sender is my domain" (breaks on forwarding, checks the wrong identity
+for what users see). **DKIM** — the sending server cryptographically signs selected headers and
+body; the public key sits in DNS; the signature survives relaying. **DMARC** — the keystone: ties
+SPF/DKIM results to the *visible* `From:` domain (alignment), tells receivers what to do on
+failure (`none`→`quarantine`→`reject`), and mails you aggregate reports of who's sending as you.
+Deploy all three or watch your mail rot in spam folders: the big providers now effectively require
+it.
+</Callout>
+
+Transport encryption is its own retrofit: **STARTTLS** upgrades the port-25 session
+opportunistically, which a path attacker can strip; **MTA-STS** and **DANE** are the
+policy mechanisms that make TLS-or-bust enforceable between providers.
+
+<WorkedExample title="Why did this email land in spam? — the triage">
+1. Open the headers and find `Authentication-Results:` at the receiving provider — three verdicts:
+   `spf=`, `dkim=`, `dmarc=`.
+2. `spf=fail` with a forwarder in `Received:` chain → classic SPF/forwarding breakage; DKIM should
+   have saved it — check verdict two.
+3. `dkim=fail` → the body or signed headers were modified in transit (mailing-list footers are
+   notorious) or the selector's DNS key is wrong/rotated.
+4. `dmarc=fail` with `p=reject` → receivers were *instructed* to refuse; check alignment: does the
+   `From:` domain match what SPF/DKIM validated?
+5. All three pass? Then it's reputation/content scoring — warm up the sending IP, fix the
+   list-hygiene bounces, and stop writing like spam.
+</WorkedExample>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "SMTP's envelope sender (MAIL FROM) differs from the From: header. Why does that matter?",
+      options: [
+        "It doesn't — they must always match",
+        "Servers route and SPF-check the envelope, but users see the header — spoofing and DMARC's alignment concept live in that gap",
+        "The envelope is encrypted, the header is not",
+      ],
+      answer: 1,
+      explanation:
+        "SPF validates the envelope domain; users trust the visible From:. DMARC exists precisely to require alignment between the validated identity and the displayed one.",
+    },
+    {
+      q: "A receiving server answers RCPT TO with 452 (temporary). What happens to the message?",
+      options: [
+        "It bounces immediately",
+        "The sending MTA queues and retries on a backoff schedule, typically for days, before bouncing",
+        "It's silently dropped",
+      ],
+      answer: 1,
+      explanation:
+        "4xx means 'try again later' — store-and-forward queueing with retries is what makes email survive outages; only 5xx produces an immediate bounce.",
+    },
+  ]}
+/>

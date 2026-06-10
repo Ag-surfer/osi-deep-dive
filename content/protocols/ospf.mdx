@@ -1,0 +1,106 @@
+export const sources = [
+  { label: "RFC 2328 — OSPF Version 2", href: "https://www.rfc-editor.org/rfc/rfc2328.html" },
+  { label: "RFC 5340 — OSPF for IPv6 (OSPFv3)", href: "https://www.rfc-editor.org/rfc/rfc5340.html" },
+  { label: "Tanenbaum & Wetherall, Computer Networks, Ch. 5", href: "https://www.pearson.com/" },
+];
+
+## Link-state routing, industrial strength
+
+OSPF is the dominant **interior gateway protocol** — the one routing packets inside enterprises,
+campuses, and many ISP backbones (its main rival, IS-IS, runs the rest). Where BGP routes *between*
+organizations on policy, OSPF routes *within* one on math: every router learns the complete
+topology and independently computes shortest paths with **Dijkstra's algorithm**.
+
+## How it works
+
+**1. Hello and adjacency.** Routers multicast **Hello** packets (to 224.0.0.5) to discover
+neighbors and verify two-way liveness. On multi-access networks (Ethernet), the segment elects a
+**designated router** (DR) so n routers don't need n² adjacencies — everyone synchronizes with the
+DR instead.
+
+**2. Flood the map.** Each router describes its links and their **costs** in **link-state
+advertisements** (LSAs), flooded reliably to every router in the area. Each LSA carries a sequence
+number and age; routers store them all in an identical **link-state database** (LSDB). The
+guarantee that matters: *every router has the same map*.
+
+**3. Run Dijkstra.** Each router computes the shortest-path tree from itself over the LSDB and
+installs the resulting next hops in its forwarding table. Cost is configurable per interface —
+classically `reference-bandwidth / interface-bandwidth`, so a 10 Gb/s link is 10× cheaper than
+1 Gb/s. Equal-cost paths are all installed (**ECMP**), spreading load.
+
+**4. React to change.** A link dies → its router floods a new LSA → everyone re-runs Dijkstra.
+Convergence is typically sub-second on modern gear — the decisive advantage over distance-vector's
+rumor propagation and count-to-infinity pathologies.
+
+<WorkedExample title="Why areas exist">
+Flooding and Dijkstra scale with topology size — every change makes every router recompute. OSPF's
+answer is hierarchy:
+
+1. Split the network into **areas**; all inter-area traffic transits **area 0** (the backbone).
+2. Routers see full topology only *within* their area; **area border routers** summarize other
+   areas as plain prefixes (distance-vector-like at the boundary).
+3. A flapping link in area 3 now triggers recomputation only in area 3 — the blast radius of
+   instability is contained.
+
+The design lesson generalizes: hierarchy is how link-state protocols buy scale, at the cost of
+optimal paths across area boundaries.
+</WorkedExample>
+
+## Details that matter in practice
+
+- **Runs directly on IP** (protocol 89) — no TCP/UDP. Reliability is built in via explicit LSA
+  acknowledgments.
+- **LSA types are the exam favorite:** type 1 (router links), type 2 (network/DR), type 3
+  (inter-area summary), type 5 (external routes redistributed into OSPF, e.g. from BGP or statics).
+- **Timers:** Hello every 10 s, dead after 40 s (4× missed) on broadcast networks — and both ends
+  must agree or the adjacency never forms (a classic misconfiguration).
+- **Passive interfaces:** advertise a subnet without speaking OSPF on it — standard hygiene on
+  user-facing ports.
+- **OSPFv3** carries IPv6 (and, with address families, IPv4) — same algorithm, reworked packet
+  formats, link-local transport.
+
+<Callout variant="warning" title="The classic failure modes">
+Adjacencies stuck in *ExStart/Exchange* → MTU mismatch between neighbors. Adjacency never forms →
+mismatched hello/dead timers, area IDs, or authentication. Suboptimal routing after a merger →
+inconsistent reference bandwidth, so 10 Gb/s and 100 Gb/s links cost the same. Routing meltdown →
+someone redistributed the full BGP table into OSPF (type-5 LSA flood) — the canonical "never do
+this."
+</Callout>
+
+## Security
+
+<Callout variant="security" title="Authenticate your IGP">
+An attacker who can speak OSPF on your network can advertise themselves as the best path to
+anything — interior MITM with one crafted LSA. Defense: cryptographic authentication on every
+adjacency (MD5 historically; SHA via RFC 5709), passive interfaces everywhere users live, and
+treating IGP participation as a privileged, switch-port-controlled capability.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "What does every OSPF router in an area provably share?",
+      options: [
+        "The same forwarding table",
+        "An identical link-state database — the full topology map",
+        "A TCP session with every other router",
+      ],
+      answer: 1,
+      explanation:
+        "Reliable flooding synchronizes the LSDB across the area; each router then runs Dijkstra independently. Forwarding tables differ (paths are computed from each router's own position).",
+    },
+    {
+      q: "Why does OSPF converge faster than RIP-style distance-vector protocols?",
+      options: [
+        "It sends updates more often",
+        "Topology changes are flooded as facts and each router recomputes from the full map — no hop-by-hop rumor propagation or count-to-infinity",
+        "It uses TCP for reliability",
+      ],
+      answer: 1,
+      explanation:
+        "Distance-vector news travels one exchange per hop and can chase infinity. Link-state floods the changed fact itself; every router has the map and recomputes immediately.",
+    },
+  ]}
+/>

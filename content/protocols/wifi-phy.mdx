@@ -1,0 +1,104 @@
+export const sources = [
+  { label: "IEEE 802.11 — Wireless LAN", href: "https://standards.ieee.org/ieee/802.11/" },
+  { label: "RFC 5416 — CAPWAP (context)", href: "https://www.rfc-editor.org/rfc/rfc5416.html" },
+];
+
+## Making radio behave like a cable
+
+Turning open-air radio into a 10-gigabit LAN link is a far harder physics problem than driving a
+wire, and the 802.11 physical layer is the accumulated answer. This page is the radio underneath
+the [Wireless deep dive](/wireless/) and the [Data Link page's CSMA/CA](/layers/data-link/): how
+bits become radio waves robust enough to survive walls, microwaves, and a hundred neighbors'
+networks.
+
+## Bands and channels: the spectrum you're fighting over
+
+| Band | Character | The trade-off |
+| --- | --- | --- |
+| **2.4 GHz** | Long range, penetrates walls | Crowded (Bluetooth, microwaves, old gear); only **3 non-overlapping** 20 MHz channels — congestion central |
+| **5 GHz** | More channels, faster | Shorter range, weaker through walls; some channels share with radar (DFS) |
+| **6 GHz** (Wi-Fi 6E/7) | Clean, wide, lots of channels | Newest devices only; even shorter range |
+
+Channel **width** is a core lever: bonding 20 MHz channels into 40/80/160/320 MHz multiplies
+throughput — but a wide channel is harder to find clear, more prone to interference, and (in
+crowded 2.4 GHz) antisocial. The eternal Wi-Fi tension: width for speed vs narrow for coexistence.
+
+## OFDM: hundreds of slow streams beat one fast one
+
+<Callout variant="insight" title="Why Wi-Fi splits the channel into subcarriers">
+A single fast signal is wrecked by **multipath** — in a room, the signal arrives many times over,
+bounced off walls at different delays, and the echoes smear fast symbols into each other. **OFDM**
+(orthogonal frequency-division multiplexing) splits the channel into hundreds of narrow
+**subcarriers**, each carrying a *slow* stream whose symbols are long enough to ride out the
+echoes (helped by a **guard interval** between symbols). Hundreds of slow parallel streams are
+dramatically more multipath-robust than one fast one — and if interference clobbers a few
+subcarriers, only those bits are lost, not the whole link. OFDM is the foundation that made
+high-rate indoor Wi-Fi (and LTE/5G, and cable) possible.
+</Callout>
+
+## The speed levers, generation by generation
+
+The same three knobs as [Ethernet PHY](/protocols/ethernet-phy/), pulled in the air:
+
+1. **Modulation density (QAM)**: each subcarrier carries a constellation point. 64-QAM = 6 bits,
+   256-QAM (Wi-Fi 5) = 8, 1024-QAM (Wi-Fi 6) = 10, 4096-QAM (Wi-Fi 7) = 12 — and each denser step
+   needs higher SNR, which is why your link rate *drops as you walk away*: **adaptive modulation**
+   trades bits/symbol for robustness as signal fades.
+2. **Channel width**: 20 → 40 → 80 → 160 → 320 MHz.
+3. **Spatial streams (MIMO)**: multiple antennas send *independent* data streams on the same
+   frequency, separated by the math of how they bounce differently to the receiver — 4×4 MIMO ≈ 4×
+   the data. **MU-MIMO** serves several clients at once; **beamforming** shapes the antenna pattern
+   toward a specific client for more SNR.
+
+Stack all three and Wi-Fi 7's headline numbers appear — but the *real-world* rate is always
+gated by SNR, interference, and how many neighbors are talking.
+
+## OFDMA: scheduling arrives in Wi-Fi
+
+Wi-Fi 6's signature change borrows from cellular. Classic Wi-Fi gives a transmitting station the
+*whole* channel for its turn — wasteful for the small, frequent packets of IoT and chatty apps.
+**OFDMA** subdivides the channel into **resource units** and assigns different chunks to different
+clients *simultaneously*, so the AP packs many small transmissions into one airtime slot. It's a
+shift from pure contention toward AP **scheduling** — the same philosophical move that separates
+[Wi-Fi from cellular](/wireless/), creeping into Wi-Fi itself.
+
+## Why it never matches the box's number
+
+<Callout variant="warning" title="Rated vs real">
+The gigabit figure on the router box is a *PHY* maximum: peak QAM, max width, all spatial streams,
+ideal SNR, one client. Reality subtracts relentlessly — MAC overhead and the CSMA/CA
+listen-before-talk tax (~half the airtime can be protocol, not payload), interference forcing
+lower QAM, walls cutting SNR, and every other device *sharing the same airtime*. Wi-Fi is a
+**shared half-duplex medium**: total capacity is divided among everyone talking, and one slow
+distant client drags the whole cell down by hogging airtime at a low rate. Expecting wire-like,
+per-device, full-duplex throughput is the root of most "my Wi-Fi is slow" disappointment.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why does Wi-Fi use OFDM (hundreds of narrow subcarriers) instead of one fast carrier?",
+      options: [
+        "It's simpler to implement",
+        "Splitting into slow parallel subcarriers resists multipath — wall-bounce echoes that would smear one fast signal only affect a few subcarriers",
+        "It uses less power",
+      ],
+      answer: 1,
+      explanation:
+        "Indoors the signal arrives many times via different bounce paths. Long, slow OFDM symbols (plus a guard interval) ride out those echoes, and damage is contained to a few subcarriers rather than the whole link.",
+    },
+    {
+      q: "Why does your Wi-Fi link rate drop as you move away from the access point?",
+      options: [
+        "The router reduces power to save energy",
+        "Lower SNR forces adaptive modulation down to sparser QAM constellations — fewer bits per symbol, but still decodable",
+        "The channel width shrinks with distance",
+      ],
+      answer: 1,
+      explanation:
+        "Dense constellations (1024-QAM) pack points close together and need strong signal to distinguish. As SNR falls with distance, the radio falls back to 256-QAM, 64-QAM, etc. — trading throughput for reliability.",
+    },
+  ]}
+/>

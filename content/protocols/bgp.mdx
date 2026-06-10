@@ -1,0 +1,110 @@
+export const sources = [
+  { label: "RFC 4271 — A Border Gateway Protocol 4 (BGP-4)", href: "https://www.rfc-editor.org/rfc/rfc4271.html" },
+  { label: "RFC 8205 — BGPsec Protocol Specification", href: "https://www.rfc-editor.org/rfc/rfc8205.html" },
+  { label: "RFC 6480 — RPKI Architecture", href: "https://www.rfc-editor.org/rfc/rfc6480.html" },
+  { label: "Kurose & Ross, Computer Networking, Ch. 5.4", href: "https://gaia.cs.umass.edu/kurose_ross/index.php" },
+];
+
+## The protocol that holds the internet together
+
+The internet is ~75,000 independently operated networks — **autonomous systems** (ASes), each with
+a number (Google is AS15169, your ISP has one too). BGP is how they tell each other what addresses
+they can reach. Every inter-provider link on earth runs it; when BGP breaks, companies vanish from
+the internet (Facebook's 2021 six-hour outage was a BGP withdrawal). It is, famously, "the protocol
+that holds the internet together with duct tape."
+
+<Callout variant="insight" title="BGP optimizes for policy, not distance">
+Interior protocols ask "what's the shortest path?" BGP asks "what's the path my business
+relationships allow?" An ISP carries traffic for **customers** (they pay), exchanges it with
+**peers** (free, mutual), and buys it from **providers**. Routes learned from customers are
+preferred over peers over providers — *money first, hops later*. Understanding this single fact
+explains most "weird" internet routing.
+</Callout>
+
+## How it works
+
+BGP is almost insultingly simple mechanically — and bottomlessly deep operationally:
+
+1. Two routers establish a **TCP connection on port 179** (BGP trusts TCP for reliability — a
+   routing protocol riding on the transport layer).
+2. They exchange **OPEN** messages (AS numbers, capabilities), then full routing tables once, then
+   only **incremental UPDATEs**: "prefix 203.0.113.0/24 is reachable via this path" or a
+   **withdrawal**. **KEEPALIVEs** (typically every 60 s) prove liveness; a **NOTIFICATION**
+   tears the session down.
+3. Each route carries **path attributes**, and the best-path algorithm compares them in strict
+   order. The ones that matter daily:
+
+| Attribute | What it does | Who it influences |
+| --- | --- | --- |
+| **LOCAL_PREF** | Operator's explicit preference — checked first | Outbound traffic (within your AS) |
+| **AS_PATH** | Every AS the route has traversed | Loop prevention + shorter-is-better tiebreak |
+| **MED** | "If you have several links to me, prefer this one" | Inbound traffic (a hint to neighbors) |
+| **NEXT_HOP** | Where to actually forward | The data plane |
+| **Communities** | Free-form tags ("customer route", "don't export to peers") | Policy automation |
+
+<WorkedExample title="Loop prevention with no map and no TTL">
+AS 64500 receives a route whose AS_PATH is `64510 64520 64500`.
+
+1. It scans the path for its own AS number — and finds it.
+2. The route is rejected unconditionally: accepting it would mean traffic could circle back
+   through 64500 forever.
+3. That's the entire loop-prevention mechanism: **the path itself is the loop detector** — no
+   topology map (link-state), no hop counter (distance-vector). This is what "path-vector
+   protocol" means.
+</WorkedExample>
+
+## The operational realities every engineer should know
+
+- **Convergence is slow.** A withdrawn prefix can take minutes to settle globally as ASes explore
+  alternate paths (path hunting). BGP favors stability over speed — **route flap damping** and
+  **MRAI timers** deliberately slow churn.
+- **The global table is huge.** ~1 million IPv4 prefixes. Every default-free router carries them
+  all, which is why **route aggregation** and prefix-length filters (most ASes reject anything
+  longer than /24) matter.
+- **iBGP vs eBGP.** eBGP speaks between ASes; iBGP redistributes those routes *inside* an AS — and
+  because iBGP doesn't append to AS_PATH, it can't detect loops the same way, demanding a full
+  mesh, **route reflectors**, or confederations.
+- **Traffic engineering is asymmetric.** You control where your traffic *leaves* (LOCAL_PREF) far
+  more easily than where it *enters* (you can only hint — MED, AS_PATH prepending, or advertising
+  more-specific prefixes).
+
+## Security: the internet's softest underbelly
+
+<Callout variant="security" title="Hijacks, leaks, and the slow fix">
+Classic BGP believes whatever it's told. **Prefix hijacking** — announcing address space you don't
+own — has rerouted YouTube through Pakistan (2008) and cryptocurrency traffic through attackers
+(repeatedly). **Route leaks** — re-advertising routes you shouldn't (a customer announcing its two
+providers to each other) — have melted national connectivity by accident. The fixes arriving over
+the last decade: **RPKI route-origin validation** (cryptographic proof that an AS may originate a
+prefix — now covering the majority of routes), AS_PATH filtering, and the **MANRS** operator
+norms. Full path validation (BGPsec) exists on paper but not, meaningfully, on the internet.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "How does BGP prevent routing loops without a topology map or TTL?",
+      options: [
+        "Every router floods link-state advertisements",
+        "Each route carries the full AS_PATH; any AS seeing itself in the path rejects the route",
+        "Routes expire after 16 hops",
+      ],
+      answer: 1,
+      explanation:
+        "BGP is a path-vector protocol: the AS_PATH attribute records every AS traversed, so loop detection is a simple self-membership test on receipt.",
+    },
+    {
+      q: "Your AS has routes to the same prefix from a customer and from a cheaper-looking peer path. Which typically wins, and why?",
+      options: [
+        "The peer path — fewer hops wins",
+        "The customer path — LOCAL_PREF encodes business policy, and customers pay",
+        "Whichever arrived first",
+      ],
+      answer: 1,
+      explanation:
+        "LOCAL_PREF is evaluated before AS_PATH length, and operators set it to prefer customer routes (revenue) over peer routes over provider routes (cost). BGP optimizes money before distance.",
+    },
+  ]}
+/>

@@ -10,10 +10,11 @@ import { join } from "node:path";
 import { GLOSSARY } from "./glossary";
 import { INTERVIEW_QUESTIONS } from "./interview";
 import { LAYERS } from "./layers";
+import { PROTOCOLS } from "./protocols";
 
 export interface SearchRecord {
   id: string;
-  type: "layer" | "glossary" | "section" | "question" | "page";
+  type: "layer" | "glossary" | "section" | "question" | "page" | "protocol";
   /** Display title. */
   title: string;
   /** Context line, e.g. the parent layer for a section. */
@@ -180,6 +181,38 @@ export function buildSearchRecords(): SearchRecord[] {
       body: q.answer.slice(0, BODY_CAP),
       href: `/interview/#${q.id}`,
     });
+  }
+
+  for (const p of PROTOCOLS) {
+    records.push({
+      id: `protocol-${p.slug}`,
+      type: "protocol",
+      title: `${p.name} — ${p.fullName}`,
+      context: `L${p.layer} · ${p.standard}`,
+      body: p.tagline.slice(0, BODY_CAP),
+      href: `/protocols/${p.slug}/`,
+    });
+  }
+
+  const protoDir = join(process.cwd(), "content", "protocols");
+  for (const file of readdirSync(protoDir).filter((f) => f.endsWith(".mdx"))) {
+    const slug = file.replace(/\.mdx$/, "");
+    const proto = PROTOCOLS.find((p) => p.slug === slug);
+    if (!proto) continue;
+    const src = readFileSync(join(protoDir, file), "utf8");
+    const sections = src.split(/^## /m).slice(1);
+    for (const section of sections) {
+      const heading = section.split("\n")[0]!.trim();
+      const text = stripMdx(section.slice(heading.length));
+      records.push({
+        id: `protosection-${slug}-${slugify(heading)}`,
+        type: "section",
+        title: heading,
+        context: `${proto.name} (L${proto.layer})`,
+        body: text.slice(0, BODY_CAP),
+        href: `/protocols/${slug}/#${slugify(heading)}`,
+      });
+    }
   }
 
   for (const p of STATIC_PAGES) {

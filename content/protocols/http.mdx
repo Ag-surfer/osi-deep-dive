@@ -1,0 +1,110 @@
+export const sources = [
+  { label: "RFC 9110 — HTTP Semantics", href: "https://www.rfc-editor.org/rfc/rfc9110.html" },
+  { label: "RFC 9111 — HTTP Caching", href: "https://www.rfc-editor.org/rfc/rfc9111.html" },
+  { label: "RFC 9113 — HTTP/2", href: "https://www.rfc-editor.org/rfc/rfc9113.html" },
+  { label: "RFC 9114 — HTTP/3", href: "https://www.rfc-editor.org/rfc/rfc9114.html" },
+];
+
+## The protocol that ate the application layer
+
+HTTP began as "GET a hypertext document." Today it carries APIs, video, software updates, IoT
+telemetry, gRPC, and — via WebSocket upgrades and WebTransport — even its own replacements. New
+application protocols are mostly *designed on top of HTTP* now, because HTTP is what firewalls
+pass, proxies understand, and every language speaks. Knowing it deeply is table stakes.
+
+## Semantics: the part that never changes
+
+RFC 9110 deliberately separates HTTP's *meaning* from its wire format, because the meaning has
+survived three transports:
+
+- **Methods** with two crucial properties: **safe** (GET, HEAD — no side effects, cacheable,
+  prefetchable) and **idempotent** (PUT, DELETE — repeating is harmless, so clients may retry).
+  POST is neither, which is why browsers warn before resubmitting forms and why retry logic must
+  care about method.
+- **Status codes** by first digit: 2xx success, 3xx redirection (301 permanent vs 302/307
+  temporary — 307 preserves the method), 4xx *you* (401 unauthenticated, 403 unauthorized, 404,
+  429 back off), 5xx *me* (500, 502/504 — the load balancer couldn't reach or wait for a backend:
+  on-call's bread and butter).
+- **Headers** negotiate everything: content type and encoding, language, range requests, caching,
+  auth. **Statelessness** is the architectural keystone — every request stands alone, which is
+  what makes horizontal scaling trivial and is why cookies/tokens exist to layer identity back on
+  top.
+
+## Caching: HTTP's superpower
+
+The web survives its own scale because most requests never reach origin. The vocabulary
+(RFC 9111): `Cache-Control: max-age` (how long it's fresh), `public/private` (shared caches
+allowed?), `no-store` (never), `immutable` (skip revalidation). When freshness expires,
+**revalidation** makes staleness cheap: the client sends `If-None-Match: <ETag>` and the server
+answers **304 Not Modified** — headers only, no body. The modern asset pattern: hashed filenames
+(`app.3f9c2.js`) cached `immutable` for a year, and a tiny never-cached HTML page pointing at them.
+
+<WorkedExample title="Reading a real exchange like an engineer">
+`curl -v https://example.com/api/users/42` returns:
+
+```http
+HTTP/2 200
+content-type: application/json
+cache-control: private, max-age=0, must-revalidate
+etag: "a3c1f0"
+vary: Accept-Encoding, Authorization
+```
+
+1. `private` — per-user data; CDNs must not cache it (a wrong `public` here is a data leak —
+   caching the wrong user's response to everyone).
+2. `must-revalidate` + ETag — clients may store it but must revalidate each use; most hits become
+   cheap 304s.
+3. `Vary` — the cache key includes those request headers, so gzip and non-gzip clients (and
+   different users!) get distinct entries. Mis-set Vary is the classic cache-poisoning footgun.
+</WorkedExample>
+
+## The wire formats: three generations
+
+The semantics above rode three transports, each fixing its predecessor's bottleneck
+(the full story is on the [Application layer page](/layers/application/)): **HTTP/1.1** — text
+framing, keep-alive, but responses queue in order; **HTTP/2** — binary frames multiplexing many
+streams over one TCP connection with HPACK header compression, exposing TCP's head-of-line
+blocking; **HTTP/3** — the same semantics over [QUIC](/protocols/quic/), where streams are
+independent. One detail worth knowing: HTTP/2/3 didn't just compress headers for size — HPACK/QPACK
+exist because header *dictionaries shared across requests* would otherwise be a compression
+side-channel (the CRIME lesson).
+
+## Security headers, the short list
+
+<Callout variant="security" title="What production responses should carry">
+**HSTS** (`Strict-Transport-Security`) — never speak plaintext to this host again, closing the
+ssl-strip window. **`Content-Security-Policy`** — the real XSS mitigation. **`Set-Cookie` flags**
+— `Secure; HttpOnly; SameSite` are the session-hijack and CSRF defenses. And remember
+**request smuggling**: HTTP/1.1's two framing mechanisms (Content-Length vs chunked) can disagree,
+and a front proxy + backend disagreeing about where a request ends lets attackers splice requests
+into other users' connections — the strongest practical argument for HTTP/2-to-the-backend.
+</Callout>
+
+## Check your understanding
+
+<Quiz
+  questions={[
+    {
+      q: "Why may a client safely auto-retry a timed-out DELETE but not a timed-out POST?",
+      options: [
+        "DELETE is faster",
+        "DELETE is idempotent — repeating it converges to the same state; POST may create a second order/charge",
+        "POST responses can't be cached",
+      ],
+      answer: 1,
+      explanation:
+        "Idempotency is the retry contract: PUT/DELETE applied twice equal once. POST carries no such promise — hence idempotency keys in payment APIs.",
+    },
+    {
+      q: "A CDN starts serving user A's account page to user B. Which header was most likely wrong?",
+      options: [
+        "ETag",
+        "Cache-Control said 'public' (or Vary omitted the auth header) on a per-user response",
+        "Content-Length",
+      ],
+      answer: 1,
+      explanation:
+        "Shared caches store what Cache-Control permits, keyed by URL plus Vary. Per-user responses must be 'private' (and/or Vary on the credential) — misconfiguration here is a classic data-leak incident.",
+    },
+  ]}
+/>
