@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
 import { MobileNav } from "./MobileNav";
+import { SearchDialog } from "./SearchDialog";
+import { buildSearchRecords } from "@/lib/searchIndex";
 
 const NAV = [
   { href: "/layers/physical/", label: "Layers" },
@@ -13,6 +15,9 @@ const NAV = [
 ];
 
 export function SiteHeader() {
+  // Server component: the index is built once at `next build` and shipped
+  // as props to the client dialog.
+  const searchRecords = buildSearchRecords();
   return (
     <header
       className="sticky top-0 z-40 border-b backdrop-blur print:hidden"
@@ -44,6 +49,7 @@ export function SiteHeader() {
           >
             Cheat&nbsp;Sheet
           </Link>
+          <SearchDialog records={searchRecords} />
           <ThemeToggle />
           <MobileNav />
         </div>

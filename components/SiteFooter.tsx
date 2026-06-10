@@ -32,6 +32,12 @@ export function SiteFooter() {
             <Link href="/troubleshoot/" className="hover:text-[var(--fg)]">
               Troubleshoot
             </Link>
+            <Link href="/models/" className="hover:text-[var(--fg)]">
+              History
+            </Link>
+            <Link href="/modern/" className="hover:text-[var(--fg)]">
+              Modern
+            </Link>
             <Link href="/cheat-sheet/" className="hover:text-[var(--fg)]">
               Cheat Sheet
             </Link>

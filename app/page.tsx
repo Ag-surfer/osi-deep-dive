@@ -97,6 +97,15 @@ export default function Home() {
               layer; its bottom two fold into the Link layer. Learn OSI for the concepts, recognize
               TCP/IP in practice.
             </p>
+            <p className="mt-3 text-sm leading-relaxed">
+              <Link href="/models/" className="underline underline-offset-2">
+                Why did TCP/IP win — and why do we still teach OSI? →
+              </Link>
+              <br />
+              <Link href="/modern/" className="underline underline-offset-2">
+                CDNs, load balancers, VPNs: the modern internet, layer by layer →
+              </Link>
+            </p>
           </div>
           <OsiTcpIpMap />
         </section>
