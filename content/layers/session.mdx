@@ -3,6 +3,8 @@ export const sources = [
   { label: "RFC 8446 — TLS 1.3 (session resumption)", href: "https://www.rfc-editor.org/rfc/rfc8446.html" },
   { label: "RFC 5246 — TLS 1.2", href: "https://www.rfc-editor.org/rfc/rfc5246.html" },
   { label: "Tanenbaum & Wetherall, Computer Networks, §1.4 (OSI critique)", href: "https://www.pearson.com/" },
+  { label: "RFC 6455 — The WebSocket Protocol", href: "https://www.rfc-editor.org/rfc/rfc6455.html" },
+  { label: "Stevens, UNIX Network Programming, Vol. 1 (sockets API)", href: "https://www.pearson.com/" },
 ];
 
 ## Managing the conversation
@@ -81,6 +83,27 @@ Establishment, dialog management, keepalive, graceful release — that's the OSI
 service list, implemented in 2011 because the web genuinely needed it. The lesson of Layer 5 isn't a
 protocol to memorize; it's that *someone must do these jobs*, and recognizing them when you see them.
 
+## The socket API: session thinking, frozen into code
+
+The other place Layer 5 survived is an API every network programmer uses: **Berkeley sockets**
+(1983), the de facto interface between applications and the transport layer. Its call sequence *is*
+a session lifecycle, named step by step:
+
+| Socket call | Session-layer reading |
+| --- | --- |
+| `socket()` | allocate an endpoint for a future dialogue |
+| `bind()` + `listen()` | declare willingness to hold conversations |
+| `connect()` / `accept()` | **establish** the dialogue (drives TCP's handshake) |
+| `send()` / `recv()` | converse |
+| `shutdown(WR)` | end *my half* gracefully — half-close, dialog control |
+| `close()` | release the session |
+
+The OSI Session layer never shipped as a protocol, but its vocabulary shipped as this API — which is
+why Tanenbaum teaches sockets in the transport chapter while OSI purists call the same ideas
+"session management." Higher up the same shape repeats: **gRPC** wraps HTTP/2 streams into typed
+call/stream lifecycles, and connection pools in every database driver are session managers — open,
+reuse, validate, gracefully retire.
+
 ## A note on "stateful" vs. "stateless"
 
 Many modern systems deliberately push session state to the *edges* (cookies, JWT tokens) so servers can
@@ -139,6 +162,17 @@ conversation?
       ],
       answer: 1,
       explanation: "Resumption lets a returning client reference a prior session and skip the full handshake — the Session layer's synchronization/resume concept.",
+    },
+    {
+      q: "In the Berkeley sockets API, which call pair most directly embodies 'session establishment'?",
+      options: [
+        "socket() and bind()",
+        "connect() and accept()",
+        "send() and recv()",
+      ],
+      answer: 1,
+      explanation:
+        "connect() (client) and accept() (server) are the moment a dialogue comes into being — they drive TCP's handshake and hand each side a socket representing the established session. socket()/bind() merely prepare endpoints; send()/recv() use the session once it exists.",
     },
   ]}
 />

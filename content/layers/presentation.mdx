@@ -3,6 +3,7 @@ export const sources = [
   { label: "The Unicode Standard", href: "https://www.unicode.org/standard/standard.html" },
   { label: "RFC 8259 — JSON", href: "https://www.rfc-editor.org/rfc/rfc8259.html" },
   { label: "ITU-T X.680 — ASN.1", href: "https://www.itu.int/rec/T-REC-X.680" },
+  { label: "RFC 1951 — DEFLATE Compressed Data Format", href: "https://www.rfc-editor.org/rfc/rfc1951.html" },
 ];
 
 ## The translator between machine and wire
@@ -72,6 +73,31 @@ shields you from it.
 - **Encryption** transforms data so only the intended party can read it. **TLS** is the towering
   example: it negotiates ciphers and keys, then encrypts the application's bytes — confidentiality,
   integrity, and authentication, sitting exactly where the Presentation layer says encryption belongs.
+
+### Inside compression: two ideas carry the web
+
+Nearly all lossless compression composes two insights:
+
+1. **Huffman coding** — frequent symbols get short bit codes, rare ones get long codes. The optimal
+   such code was an MIT term paper (1951, published 1952); its limit is the data's **entropy**
+   (Shannon again — the same mind bounding both what a channel can carry and what compression can
+   squeeze).
+2. **LZ77 dictionary matching** — replace repeated strings with back-references: *"the 30 bytes
+   starting here appeared 712 bytes ago."* HTML, JSON, and code are saturated with repetition, which
+   is why text compresses so well.
+
+**DEFLATE** (RFC 1951) = LZ77 + Huffman, and it is everywhere: gzip, zlib, PNG, ZIP. **Brotli**
+sharpens both steps and adds a built-in dictionary of common web strings. **Lossy** compression
+plays a different game entirely: JPEG transforms image blocks into frequency space (DCT) and simply
+*discards* the high-frequency detail human eyes barely register — unrecoverable, and unnoticeable.
+
+<Callout variant="security" title="When compression leaks secrets">
+Compression *measures repetition* — so output **size** reveals whether attacker-controlled input
+matched a secret in the same stream. The CRIME and BREACH attacks recovered session cookies
+byte-by-byte this way, guessing prefixes and watching the compressed length shrink on a hit. It's
+why TLS-level compression is dead (TLS 1.3 removed it) and why secrets and attacker input must
+never share a compression context.
+</Callout>
 
 <EncryptionTransform />
 
@@ -144,6 +170,17 @@ precisely *between* Layers 4 and 7.
       ],
       answer: 1,
       explanation: "Both carry the same information; they differ in representation (binary+schema vs. text). Picking the encoding is exactly the Presentation layer's job.",
+    },
+    {
+      q: "The CRIME/BREACH attacks recovered secrets by watching what property of a compressed-then-encrypted stream?",
+      options: [
+        "Its encryption key",
+        "Its size — compression shrinks when guessed input matches the secret",
+        "Its checksum",
+      ],
+      answer: 1,
+      explanation:
+        "Compression replaces repetition with references, so output length leaks whether attacker-controlled input repeated the secret. Encryption hides content but not length — which is why secrets and attacker input must never share a compression context.",
     },
   ]}
 />

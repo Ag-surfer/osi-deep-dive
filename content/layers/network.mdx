@@ -5,6 +5,8 @@ export const sources = [
   { label: "RFC 4632 — Classless Inter-Domain Routing (CIDR)", href: "https://www.rfc-editor.org/rfc/rfc4632.html" },
   { label: "RFC 1918 — Address Allocation for Private Internets", href: "https://www.rfc-editor.org/rfc/rfc1918.html" },
   { label: "Kurose & Ross, Computer Networking: A Top-Down Approach, Ch. 4–5", href: "https://gaia.cs.umass.edu/kurose_ross/index.php" },
+  { label: "Tanenbaum & Wetherall, Computer Networks, Ch. 5 (routing algorithms)", href: "https://www.pearson.com/" },
+  { label: "RFC 4271 — Border Gateway Protocol 4 (BGP-4)", href: "https://www.rfc-editor.org/rfc/rfc4271.html" },
 ];
 
 ## The problem the Network layer solves
@@ -80,6 +82,51 @@ prefix) wins. A packet to `192.0.2.5` matching both `192.0.2.0/24` and `0.0.0.0/
 route) follows the `/24`.
 
 <NetworkTopology />
+
+## How routes are computed: the two great algorithm families
+
+Every routing protocol on earth descends from one of two distributed algorithms — a favorite
+interview question and the heart of Kurose & Ross's Chapter 5.
+
+**Link-state (Dijkstra).** Every router floods a map fragment — "here are my neighbors and link
+costs" — to *all* other routers, so each one assembles the **complete topology graph**. Each router
+then independently runs **Dijkstra's shortest-path algorithm** over that shared map. Convergence is
+fast and loop-free once everyone has the same map; the cost is flooding overhead and per-router
+memory/CPU. This is **OSPF** and **IS-IS** — the protocols *inside* an organization.
+
+**Distance-vector (Bellman-Ford).** No router knows the map. Each periodically tells *only its
+neighbors* its current best distance to every destination; each neighbor computes
+`cost(me → you) + your distance` and keeps the minimum. Beautifully simple — this was the original
+ARPANET algorithm and lives on in **RIP** — but information spreads one hop per exchange, and bad
+news travels badly:
+
+<Callout variant="warning" title="Count-to-infinity: the classic failure">
+When a destination dies, its neighbor may learn an alternative "route" *from a router whose own path
+goes back through it* — each exchange increments the metric by one (3, 4, 5, …) as the loop chases
+"infinity." RIP caps infinity at 16 hops and adds **split horizon** (never advertise a route back to
+the neighbor you learned it from) and **poison reverse** (advertise it back with metric ∞). The
+mitigations help two-node loops but not all topologies — which is why link-state won the
+enterprise.
+</Callout>
+
+**And then there's BGP**, the internet's exterior protocol — a **path-vector** design: routes carry
+the full list of autonomous systems they traverse (loop detection: reject any path containing your
+own AS number), and selection is governed by **policy, not distance**. Your packets often don't take
+the shortest path; they take the *cheapest contractual* path. The internet's routing layer optimizes
+for money and politics first, hops second — knowing this separates textbook answers from real ones.
+
+<WorkedExample title="Dijkstra in four steps">
+Router **A** computes shortest paths on this map: A–B cost 1, A–C cost 4, B–C cost 2, B–D cost 6,
+C–D cost 3.
+
+1. Start: distances A=0; B=1, C=4 (direct); D=∞. Settle the smallest unsettled: **B (1)**.
+2. Relax B's links: C via B = 1+2 = **3** (beats 4); D via B = 1+6 = 7. Settle **C (3)**.
+3. Relax C's links: D via C = 3+3 = **6** (beats 7). Settle **D (6)**.
+4. Done: shortest paths A→C is **via B** (3, not the direct 4), A→D is **via B then C** (6).
+
+Every OSPF router runs exactly this, over a map of thousands of links, every time the topology
+changes — then installs only the *next hops* into its forwarding table.
+</WorkedExample>
 
 <ProtocolTable
   rows={[
@@ -222,6 +269,17 @@ forwarding plus NAT every time you load a page.
       ],
       answer: 1,
       explanation: "IP addressing is hierarchical (network + host via a prefix), letting routers aggregate many hosts into one route. MAC addresses are flat and cannot scale globally.",
+    },
+    {
+      q: "In a distance-vector network, a destination dies and two routers keep raising their metric to it (3, 4, 5, …) by learning from each other. This is:",
+      options: [
+        "A broadcast storm",
+        "Count-to-infinity — mitigated by split horizon, poison reverse, and a max metric",
+        "Path MTU discovery",
+      ],
+      answer: 1,
+      explanation:
+        "Each router's 'alternative route' secretly passes through the other, so the metric climbs one hop per exchange. RIP caps infinity at 16; link-state protocols avoid the problem by giving every router the full map.",
     },
   ]}
 />

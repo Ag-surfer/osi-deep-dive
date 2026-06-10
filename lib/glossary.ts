@@ -129,7 +129,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     term: "Multiplexing",
     layer: 4,
-    def: "Carrying many conversations over one connection, distinguished by port numbers.",
+    def: "Sharing one resource among many conversations — ports multiplex processes over one host; FDM/TDM share a physical medium; HTTP/2 multiplexes streams over one connection.",
   },
   {
     term: "NAT",
@@ -197,5 +197,80 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Window scaling",
     layer: 4,
     def: "A TCP option multiplying the 16-bit window so throughput can fill high bandwidth-delay paths.",
+  },
+  {
+    term: "QAM",
+    layer: 1,
+    def: "Quadrature Amplitude Modulation — encoding several bits per symbol as amplitude+phase constellation points; denser constellations need higher SNR.",
+  },
+  {
+    term: "OFDM",
+    layer: 1,
+    def: "Orthogonal Frequency-Division Multiplexing — splitting a channel into many slow parallel subcarriers (Wi-Fi, LTE/5G); resists multipath and narrowband interference.",
+  },
+  {
+    term: "CRC",
+    layer: 2,
+    def: "Cyclic Redundancy Check — polynomial-division error detection; a 32-bit CRC catches all bursts up to 32 bits. Ethernet's FCS is a CRC-32.",
+  },
+  {
+    term: "CSMA/CA",
+    layer: 2,
+    def: "Collision Avoidance — Wi-Fi's medium access: random backoff before transmitting plus link-layer ACKs, since radios can't detect collisions while sending.",
+  },
+  {
+    term: "Hidden terminal",
+    layer: 2,
+    def: "Two wireless stations out of each other's range colliding at a common receiver; mitigated by RTS/CTS channel reservation.",
+  },
+  {
+    term: "Link-state routing",
+    layer: 3,
+    def: "Each router floods its neighbor/cost map to all others, then runs Dijkstra over the full topology (OSPF, IS-IS).",
+  },
+  {
+    term: "Distance-vector routing",
+    layer: 3,
+    def: "Each router shares only its distance table with neighbors (Bellman-Ford); simple but prone to count-to-infinity (RIP).",
+  },
+  {
+    term: "Count-to-infinity",
+    layer: 3,
+    def: "Distance-vector failure where two routers ratchet a dead route's metric upward by learning from each other; mitigated by split horizon and a max metric.",
+  },
+  {
+    term: "SACK",
+    layer: 4,
+    def: "Selective Acknowledgment — TCP option reporting exactly which non-contiguous byte ranges arrived, enabling selective retransmission.",
+  },
+  {
+    term: "RTO",
+    layer: 4,
+    def: "Retransmission Timeout — SRTT + 4·RTTVAR, continuously estimated; doubled on each successive timeout (exponential backoff).",
+  },
+  {
+    term: "CUBIC",
+    layer: 4,
+    def: "Loss-based congestion control growing the window on a cubic curve in time (not ACK rate); the Linux default since 2006.",
+  },
+  {
+    term: "BBR",
+    layer: 4,
+    def: "Model-based congestion control pacing at the measured bottleneck bandwidth with ~1 BDP in flight — keeps queues short, avoiding bufferbloat.",
+  },
+  {
+    term: "MIME",
+    layer: 6,
+    def: "Multipurpose Internet Mail Extensions — labels and encodes typed content (Content-Type, Base64) so binary data survives 7-bit text protocols.",
+  },
+  {
+    term: "MX record",
+    layer: 7,
+    def: "DNS record answering 'who accepts mail for this domain?' — the indirection that routes SMTP delivery.",
+  },
+  {
+    term: "Head-of-line blocking",
+    layer: 0,
+    def: "One stalled item holding up everything queued behind it — HTTP/1.1's ordered responses, or one lost TCP segment stalling all HTTP/2 streams.",
   },
 ];

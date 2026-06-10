@@ -3,6 +3,8 @@ export const sources = [
   { label: "RFC 1035 — Domain Names (DNS)", href: "https://www.rfc-editor.org/rfc/rfc1035.html" },
   { label: "RFC 5321 — SMTP", href: "https://www.rfc-editor.org/rfc/rfc5321.html" },
   { label: "RFC 2131 — DHCP", href: "https://www.rfc-editor.org/rfc/rfc2131.html" },
+  { label: "RFC 9114 — HTTP/3", href: "https://www.rfc-editor.org/rfc/rfc9114.html" },
+  { label: "Kurose & Ross, Computer Networking: A Top-Down Approach, Ch. 2", href: "https://gaia.cs.umass.edu/kurose_ross/index.php" },
 ];
 
 ## Where the network meets the user
@@ -47,6 +49,25 @@ tunnel (Presentation-layer encryption), and **HTTP/3** runs over QUIC.
 
 <HttpRoundTrip />
 
+### HTTP grew up: 1.0 → 1.1 → 2 → 3
+
+Each HTTP version attacks the previous one's performance ceiling — a thirty-year case study in
+protocol evolution:
+
+| Version | Key change | The problem it solved |
+| --- | --- | --- |
+| **1.0** (1996) | One TCP connection **per request** | — (it created the problem) |
+| **1.1** (1997) | **Keep-alive** connections; chunked transfer; `Host` header | Handshake-per-request waste; virtual hosting on shared IPs |
+| **2** (2015) | **Binary framing**: many streams multiplexed on one connection; header compression (HPACK) | Browsers opening 6 parallel connections and still serializing requests |
+| **3** (2022) | Same semantics over **QUIC** instead of TCP | One lost packet stalling *every* HTTP/2 stream (transport-level head-of-line blocking) |
+
+The head-of-line story is the connecting thread — and a great interview answer. HTTP/1.1 had
+*application-level* HOL blocking (responses must return in order, so one slow response blocks the
+connection). HTTP/2 fixed that with multiplexed streams, only to expose *transport-level* HOL
+blocking: TCP guarantees one ordered byte stream, so a single lost segment halts every stream riding
+it. HTTP/3 moves to QUIC, whose independent streams finally make one resource's bad luck private.
+Same `GET`/`200 OK` semantics for thirty years; everything underneath rebuilt twice.
+
 ## DNS: the lookup behind every connection
 
 Before your browser can open a TCP connection, it must turn `example.com` into an IP address. DNS does
@@ -81,6 +102,34 @@ regardless of how fast the pipe is. **HTTP/3 + QUIC** fold transport and TLS set
 resumption can skip the handshake entirely), cutting this dramatically — a direct payoff of
 understanding what each layer adds.
 </WorkedExample>
+
+## Email: one message, three protocols
+
+Email looks like one service but is a relay race between asymmetric protocols — push to deliver,
+pull to read:
+
+<SequenceDiagram
+  actors={["Your client", "Your mail server", "Their mail server", "Recipient"]}
+  steps={[
+    { from: 0, to: 1, label: "SMTP submit (port 587, authenticated)" },
+    { from: 1, to: 2, label: "SMTP relay (port 25 — found via DNS MX record)" },
+    { from: 2, to: 3, label: "IMAP fetch (port 993) — when they check mail", dashed: true },
+  ]}
+  caption="SMTP pushes mail toward the destination server; IMAP lets the recipient pull it on their schedule. The handoff point is a DNS MX lookup."
+/>
+
+- **SMTP** (<RFCRef n={5321} />) is push-only and text-based — and predates spam: it has no built-in
+  sender authentication, which is why **SPF**, **DKIM** (cryptographic signatures), and **DMARC**
+  were bolted on decades later via DNS records.
+- **IMAP** keeps mail on the server and synchronizes state across devices (read flags, folders);
+  legacy **POP3** simply downloads and deletes — fine in 1996, useless with three devices.
+- **MIME** solves a Presentation-layer problem inside an Application protocol: SMTP moves 7-bit
+  text, so attachments are Base64-encoded into labeled body parts (`Content-Type: image/png`) —
+  which is why attachments inflate ~33% in transit.
+
+The MX-record handoff is the interview detail: the sending server asks DNS not for the domain's
+address, but *"who accepts mail for this domain?"* — infrastructure indirection that let
+organizations outsource mail decades before "the cloud" had a name.
 
 ## DHCP: how a host gets on the network at all
 
@@ -169,6 +218,17 @@ interplay: a Layer-7 protocol attacked at Layer 2, defended at Layer 2.
       options: ["Slow page loads", "Forged DNS responses (cache poisoning)", "TCP SYN floods"],
       answer: 1,
       explanation: "DNSSEC cryptographically signs DNS records so resolvers can detect forged/tampered answers, countering cache-poisoning attacks.",
+    },
+    {
+      q: "HTTP/2 multiplexed many streams onto one TCP connection. What problem did that expose, motivating HTTP/3?",
+      options: [
+        "Header compression became impossible",
+        "Transport-level head-of-line blocking: one lost TCP segment stalls every stream",
+        "Servers could no longer use virtual hosting",
+      ],
+      answer: 1,
+      explanation:
+        "TCP delivers one strictly ordered byte stream, so a single lost segment halts all multiplexed streams behind it. HTTP/3 runs over QUIC, whose streams are independently ordered — one stream's loss no longer blocks the rest.",
     },
   ]}
 />
