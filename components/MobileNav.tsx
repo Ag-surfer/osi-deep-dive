@@ -12,6 +12,7 @@ const TOP = [
   { href: "/glossary/", label: "Glossary & RFCs" },
   { href: "/quiz/", label: "Final Quiz" },
   { href: "/interview/", label: "Interview Prep" },
+  { href: "/troubleshoot/", label: "Troubleshooting Method" },
   { href: "/cheat-sheet/", label: "Cheat Sheet" },
 ];
 

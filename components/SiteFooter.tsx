@@ -29,6 +29,9 @@ export function SiteFooter() {
             <Link href="/interview/" className="hover:text-[var(--fg)]">
               Interview
             </Link>
+            <Link href="/troubleshoot/" className="hover:text-[var(--fg)]">
+              Troubleshoot
+            </Link>
             <Link href="/cheat-sheet/" className="hover:text-[var(--fg)]">
               Cheat Sheet
             </Link>

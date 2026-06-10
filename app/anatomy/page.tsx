@@ -4,7 +4,7 @@ import { pageMetadata } from "@/lib/site";
 export const metadata = pageMetadata({
   title: "Packet Anatomy",
   description:
-    "A real 128-byte HTTP request dissected byte by byte — Ethernet, IPv4, TCP, and HTTP fields color-coded by OSI layer, with verified checksums and an explanation for every field.",
+    "A real TCP conversation dissected byte by byte — SYN, SYN-ACK, HTTP request, 200 response, and FIN, with every field color-coded by OSI layer, verified checksums, and sequence numbers that chain across frames.",
   path: "/anatomy/",
 });
 
@@ -20,13 +20,15 @@ export default function AnatomyPage() {
         </p>
         <h1 className="mt-2 font-serif text-3xl font-bold sm:text-4xl">Packet Anatomy</h1>
         <p className="mt-4 text-lg leading-relaxed" style={{ color: "var(--fg-muted)" }}>
-          Every diagram on this site is an abstraction of something concrete: bytes on a wire. This
-          is one complete, real frame — an HTTP request from the laptop in our NAT example (
-          <span className="font-mono text-base">192.168.1.23</span>) — all 128 bytes of it. The
-          Ethernet header, IPv4 header, TCP header, and HTTP request are color-coded by layer, the
-          checksums are genuinely correct (our test suite recomputes them), and every field is
-          explained. Encapsulation stops being a metaphor when you can point at byte 22 and say
-          &ldquo;that&rsquo;s the TTL.&rdquo;
+          Every diagram on this site is an abstraction of something concrete: bytes on a wire. Here
+          is a complete, real TCP conversation — five frames, from the laptop in our NAT example (
+          <span className="font-mono text-base">192.168.1.23</span>): the handshake&rsquo;s SYN and
+          SYN-ACK, the HTTP request, the 200 response, and the closing FIN. Every byte is
+          color-coded by the layer that owns it, every checksum is genuinely correct, and the
+          sequence numbers chain arithmetically across frames — our test suite verifies all of it.
+          Encapsulation stops being a metaphor when you can point at byte 22 and say
+          &ldquo;that&rsquo;s the TTL,&rdquo; and reliability stops being one when you watch the
+          response&rsquo;s acknowledgment number account for all 74 bytes of the request.
         </p>
       </header>
 
