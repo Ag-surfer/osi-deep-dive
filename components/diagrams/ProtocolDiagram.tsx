@@ -1,0 +1,1033 @@
+"use client";
+
+import { RoughScene, type Scene } from "./RoughScene";
+
+/**
+ * One hand-drawn diagram per protocol deep-dive page, keyed by the protocol
+ * slug (matching lib/protocols.ts). Each entry is a declarative scene plus a
+ * caption and a screen-reader summary. Embedded in MDX as
+ * `<ProtocolDiagram id="bgp" />`. A test asserts every protocol slug has an
+ * entry here.
+ */
+interface Diagram {
+  scene: Scene;
+  caption: string;
+  summary: string;
+}
+
+export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
+  // ─────────────────────────── Layer 1 ───────────────────────────
+  "ethernet-phy": {
+    scene: {
+      width: 820,
+      height: 230,
+      boxes: [
+        { x: 300, y: 24, w: 220, h: 50, title: "1000BASE-T", mono: true, accent: "l1" },
+        { x: 40, y: 130, w: 150, h: 50, title: "1000", lines: ["Mb/s (speed)"] },
+        { x: 335, y: 130, w: 150, h: 50, title: "BASE", lines: ["baseband"] },
+        { x: 630, y: 130, w: 150, h: 50, title: "T", lines: ["twisted pair"] },
+      ],
+      arrows: [
+        { from: [360, 74], to: [150, 128], accent: "l1" },
+        { from: [410, 74], to: [410, 128], accent: "l1" },
+        { from: [460, 74], to: [690, 128], accent: "l1" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 213,
+          text: "gigabit copper needs all 4 pairs (PAM-5) — a dead pair drops the link to 100BASE-TX",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Ethernet PHY names decode as speed–signaling–medium. The physical layer is reinvented each generation; the frame on top never changes.",
+    summary:
+      "The name 1000BASE-T decomposes into 1000 (megabits per second), BASE (baseband signaling), and T (twisted-pair copper).",
+  },
+
+  "fiber-dwdm": {
+    scene: {
+      width: 820,
+      height: 260,
+      boxes: [
+        { x: 24, y: 30, w: 90, h: 34, title: "λ1", mono: true, accent: "l1" },
+        { x: 24, y: 80, w: 90, h: 34, title: "λ2", mono: true, accent: "l2" },
+        { x: 24, y: 130, w: 90, h: 34, title: "λ3", mono: true, accent: "l4" },
+        { x: 24, y: 180, w: 90, h: 34, title: "λ4", mono: true, accent: "l6" },
+        { x: 210, y: 95, w: 90, h: 56, title: "MUX" },
+        { x: 380, y: 95, w: 140, h: 56, title: "one fiber", lines: ["~80 λ · Tb/s"] },
+        { x: 560, y: 95, w: 90, h: 56, title: "DEMUX" },
+        { x: 706, y: 95, w: 90, h: 56, title: "λ1…λ4", mono: true },
+      ],
+      arrows: [
+        { from: [114, 47], to: [210, 110] },
+        { from: [114, 97], to: [210, 118] },
+        { from: [114, 147], to: [210, 128] },
+        { from: [114, 197], to: [210, 136] },
+        { from: [300, 123], to: [380, 123] },
+        { from: [520, 123], to: [560, 123] },
+        { from: [650, 123], to: [706, 123] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 240,
+          text: "many colors of light share one strand (WDM) — upgrade the optics, not the buried glass",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "DWDM multiplexes ~80 independent wavelengths onto a single fiber pair, pushing it into the tens of terabits per second.",
+    summary:
+      "Four wavelengths λ1 to λ4 are combined by a multiplexer onto one fiber carrying ~80 wavelengths, then split back out by a demultiplexer.",
+  },
+
+  "wifi-phy": {
+    scene: {
+      width: 820,
+      height: 240,
+      boxes: [
+        { x: 40, y: 40, w: 300, h: 56, title: "one fast carrier", lines: ["multipath smears it"] },
+        {
+          x: 470,
+          y: 40,
+          w: 310,
+          h: 56,
+          title: "OFDM: many slow subcarriers",
+          lines: ["echoes survive"],
+        },
+      ],
+      arrows: [{ from: [340, 68], to: [470, 68], label: "split the channel", labelDy: -10 }],
+      notes: [
+        {
+          x: 625,
+          y: 130,
+          text: "subcarriers (hundreds of narrow slow streams)",
+          size: 10,
+          opacity: 0.7,
+        },
+        {
+          x: 625,
+          y: 150,
+          text: "▏ ▎ ▍ ▌ ▋ ▊ ▉ █ ▉ ▊ ▋ ▌ ▍ ▎ ▏ ▎ ▍ ▌ ▋ ▊",
+          size: 14,
+          opacity: 0.6,
+          accent: "l4",
+        },
+        {
+          x: 410,
+          y: 210,
+          text: "adaptive QAM: 1024-QAM (10 bits/symbol) up close → 64-QAM far away as SNR falls",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "OFDM splits the channel into hundreds of slow subcarriers so multipath echoes — fatal to one fast signal — only nick a few of them.",
+    summary:
+      "Instead of one fast carrier that multipath would smear, OFDM divides the channel into hundreds of narrow slow subcarriers; modulation density (QAM) adapts to signal strength.",
+  },
+
+  // ─────────────────────────── Layer 2 ───────────────────────────
+  "ethernet-switching": {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 40, y: 40, w: 96, h: 44, title: "Host A", lines: ["port 1"] },
+        { x: 40, y: 160, w: 96, h: 44, title: "Host B", lines: ["port 2"] },
+        { x: 330, y: 80, w: 160, h: 86, title: "Switch", accent: "l2" },
+        { x: 660, y: 100, w: 120, h: 44, title: "CAM table", lines: ["A→1  B→2"] },
+      ],
+      arrows: [
+        { from: [136, 62], to: [330, 100], label: "learn src", labelDy: -8 },
+        { from: [136, 182], to: [330, 146], label: "learn src", labelDy: 14 },
+        { from: [490, 123], to: [660, 122] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 230,
+          text: "learn source→port · forward to known port · flood the unknown — self-configuring, no setup",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "A switch learns each source MAC's port from arriving frames, forwards to known destinations, and floods unknowns — building its table by eavesdropping.",
+    summary:
+      "Hosts A and B connect to a switch on ports 1 and 2; the switch records source MAC to port mappings in its CAM table and forwards frames accordingly.",
+  },
+
+  stp: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 350, y: 24, w: 120, h: 48, title: "Root bridge", accent: "l2" },
+        { x: 150, y: 130, w: 120, h: 48, title: "Bridge B" },
+        { x: 550, y: 130, w: 120, h: 48, title: "Bridge C" },
+      ],
+      arrows: [
+        { from: [380, 72], to: [230, 130], label: "root port" },
+        { from: [440, 72], to: [590, 130], label: "root port", labelDx: 10 },
+        {
+          from: [270, 168],
+          to: [550, 168],
+          label: "BLOCKED",
+          dashed: true,
+          both: true,
+          accent: "l1",
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 205,
+          text: "✗ redundant link blocked to break the loop — unblocks if a link fails",
+          size: 11,
+          opacity: 0.85,
+          accent: "l1",
+        },
+        {
+          x: 410,
+          y: 230,
+          text: "Ethernet frames have no TTL, so one loop = a broadcast storm. STP keeps the tree loop-free.",
+          size: 11,
+          opacity: 0.75,
+        },
+      ],
+    },
+    caption:
+      "Spanning Tree elects a root, every bridge picks its lowest-cost path to it, and redundant links are blocked — kept in reserve until a failure needs them.",
+    summary:
+      "A root bridge at the top connects to bridges B and C; the direct link between B and C is blocked (dashed) to prevent a loop, and would activate only if another link fails.",
+  },
+
+  arp: {
+    scene: {
+      width: 820,
+      height: 240,
+      boxes: [
+        { x: 40, y: 95, w: 120, h: 50, title: "Host A", lines: ["wants .5's MAC"] },
+        { x: 350, y: 24, w: 120, h: 44, title: "Host X" },
+        { x: 350, y: 98, w: 120, h: 44, title: "Host .5", accent: "l2" },
+        { x: 350, y: 172, w: 120, h: 44, title: "Host Y" },
+      ],
+      arrows: [
+        { from: [160, 110], to: [350, 46], label: "who has .5?", labelDy: -8 },
+        { from: [160, 120], to: [350, 120], label: "(broadcast)" },
+        { from: [160, 135], to: [350, 194], labelDy: 14 },
+        {
+          from: [350, 110],
+          to: [160, 128],
+          label: ".5 is at a4:5e:… (unicast reply)",
+          labelDy: -8,
+          accent: "l2",
+          dashed: true,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 226,
+          text: "broadcast question, unicast answer — and zero authentication (the root of ARP spoofing)",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "ARP broadcasts 'who has this IP?' to the whole segment; only the owner replies, unicast. No authentication — which is why ARP spoofing works.",
+    summary:
+      "Host A broadcasts an ARP request for the MAC of host .5; every host receives it but only host .5 sends a unicast reply with its MAC address.",
+  },
+
+  vlan: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 30, y: 40, w: 110, h: 44, title: "Finance PC", accent: "l3" },
+        { x: 30, y: 165, w: 110, h: 44, title: "Guest PC", accent: "l6" },
+        { x: 300, y: 95, w: 150, h: 70, title: "Switch", lines: ["VLAN 10 / 20"] },
+        { x: 640, y: 95, w: 150, h: 70, title: "another switch" },
+      ],
+      arrows: [
+        { from: [140, 62], to: [300, 110], label: "VLAN 10", labelDy: -8, accent: "l3" },
+        { from: [140, 187], to: [300, 150], label: "VLAN 20", labelDy: 14, accent: "l6" },
+        {
+          from: [450, 130],
+          to: [640, 130],
+          label: "TRUNK — both VLANs, 802.1Q tagged",
+          labelDy: -8,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 232,
+          text: "one switch, two isolated broadcast domains · 12-bit tag = 4,094 VLANs · crossing them needs a router",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "An 802.1Q tag partitions one switch into isolated VLANs; a trunk carries many VLANs between switches, tags intact. Crossing VLANs requires a router.",
+    summary:
+      "A finance PC on VLAN 10 and a guest PC on VLAN 20 share one switch but stay isolated; a trunk link carries both tagged VLANs to another switch.",
+  },
+
+  // ─────────────────────────── Layer 3 ───────────────────────────
+  bgp: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 40, y: 100, w: 130, h: 56, title: "AS 64500", lines: ["your ISP"], accent: "l3" },
+        { x: 300, y: 30, w: 130, h: 56, title: "AS 64510", lines: ["peer"] },
+        { x: 300, y: 165, w: 130, h: 56, title: "AS 64520", lines: ["provider"] },
+        { x: 600, y: 100, w: 150, h: 56, title: "203.0.113.0/24", mono: true },
+      ],
+      arrows: [
+        { from: [170, 118], to: [300, 70], label: "peer (free)", labelDy: -8 },
+        { from: [170, 138], to: [300, 190], label: "provider ($)", labelDy: 14 },
+        { from: [430, 64], to: [600, 116], label: "AS_PATH: 64510 64530", labelDy: -8 },
+        { from: [430, 196], to: [600, 140] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 235,
+          text: "path-vector: reject any route whose AS_PATH already lists you · prefer customer > peer > provider (money first)",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "BGP announces reachability between autonomous systems, carrying the full AS_PATH for loop detection — and chooses routes by business policy, not hop count.",
+    summary:
+      "AS 64500 peers with AS 64510 (free) and buys transit from AS 64520 (paid); a route to 203.0.113.0/24 arrives with an AS_PATH, and policy prefers customer over peer over provider routes.",
+  },
+
+  ospf: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 40, y: 95, w: 130, h: 60, title: "Router", lines: ["floods LSAs"], accent: "l3" },
+        { x: 280, y: 30, w: 150, h: 56, title: "every router", lines: ["identical LSDB"] },
+        { x: 280, y: 165, w: 150, h: 56, title: "Dijkstra", lines: ["shortest-path tree"] },
+        { x: 600, y: 95, w: 160, h: 60, title: "forwarding table", lines: ["next hops"] },
+      ],
+      arrows: [
+        { from: [170, 110], to: [280, 64], label: "flood the map", labelDy: -8, accent: "l3" },
+        { from: [355, 86], to: [355, 165], label: "run on full map", labelDx: 70 },
+        { from: [430, 196], to: [600, 140], label: "install routes", labelDy: 14 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 235,
+          text: "link-state: every router floods its links, all share one map, each runs Dijkstra — fast, loop-free convergence",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "OSPF floods link-state advertisements so every router holds an identical map, then each independently runs Dijkstra to compute shortest paths.",
+    summary:
+      "A router floods link-state advertisements; every router assembles an identical link-state database, runs Dijkstra over the full map, and installs the resulting next hops.",
+  },
+
+  ipv6: {
+    scene: {
+      width: 820,
+      height: 220,
+      boxes: [
+        {
+          x: 60,
+          y: 60,
+          w: 240,
+          h: 60,
+          title: "2001:0db8:85a3",
+          lines: ["global routing prefix /48"],
+          mono: true,
+          accent: "l3",
+        },
+        {
+          x: 320,
+          y: 60,
+          w: 150,
+          h: 60,
+          title: "0000",
+          lines: ["subnet /64"],
+          mono: true,
+          accent: "l4",
+        },
+        {
+          x: 490,
+          y: 60,
+          w: 270,
+          h: 60,
+          title: "8a2e:0370:7334",
+          lines: ["interface ID (self-made)"],
+          mono: true,
+          accent: "l6",
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 40,
+          text: "128 bits = 8 groups of 16, written in hex (:: collapses one run of zeros)",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 165,
+          text: "the /64 interface half is self-generated (SLAAC) and verified unique by Duplicate Address Detection",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 190,
+          text: "no NAT required · Hop Limit replaces TTL · routers never fragment",
+          size: 11,
+          opacity: 0.7,
+        },
+      ],
+    },
+    caption:
+      "An IPv6 address splits into a routed network prefix, a subnet, and a self-generated interface identifier — 128 bits, no NAT required.",
+    summary:
+      "A 128-bit IPv6 address divides into a global routing prefix (/48), a subnet field (to /64), and a 64-bit interface identifier that the host generates itself via SLAAC.",
+  },
+
+  icmp: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 30, y: 100, w: 110, h: 50, title: "Source", lines: ["traceroute"], accent: "l3" },
+        { x: 250, y: 100, w: 100, h: 50, title: "Router 1" },
+        { x: 420, y: 100, w: 100, h: 50, title: "Router 2" },
+        { x: 590, y: 100, w: 100, h: 50, title: "Router 3" },
+      ],
+      arrows: [
+        { from: [140, 118], to: [250, 118], label: "TTL=1", labelDy: -8 },
+        {
+          from: [250, 132],
+          to: [140, 150],
+          label: "Time Exceeded",
+          labelDy: 16,
+          dashed: true,
+          accent: "l1",
+        },
+        { from: [140, 110], to: [420, 95], label: "TTL=2", labelDy: -8 },
+        { from: [140, 105], to: [590, 90], label: "TTL=3", labelDy: -8 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 230,
+          text: "each hop that decrements TTL to 0 returns ICMP Time Exceeded — the loop-prevention field becomes a path-mapping tool",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Traceroute sends packets with TTL = 1, 2, 3…; each router that drops one returns an ICMP Time Exceeded, revealing the path hop by hop.",
+    summary:
+      "A source sends probes with increasing TTL values; router 1 (TTL=1), router 2 (TTL=2), and router 3 (TTL=3) each return an ICMP Time Exceeded message, mapping the route.",
+  },
+
+  // ─────────────────────────── Layer 4 ───────────────────────────
+  tcp: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 90, y: 30, w: 120, h: 44, title: "Client" },
+        { x: 610, y: 30, w: 120, h: 44, title: "Server" },
+      ],
+      arrows: [
+        { from: [210, 95], to: [610, 95], label: "SYN  seq=x", labelDy: -8, accent: "l4" },
+        {
+          from: [610, 140],
+          to: [210, 140],
+          label: "SYN-ACK  seq=y, ack=x+1",
+          labelDy: -8,
+          accent: "l4",
+        },
+        {
+          from: [210, 185],
+          to: [610, 185],
+          label: "ACK  ack=y+1 — established",
+          labelDy: -8,
+          accent: "l4",
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 232,
+          text: "three messages synchronize both initial sequence numbers — the minimum for mutual agreement",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "TCP's three-way handshake synchronizes both directions' initial sequence numbers before any data flows: SYN, SYN-ACK, ACK.",
+    summary:
+      "The client sends SYN with sequence x; the server replies SYN-ACK with sequence y acknowledging x+1; the client sends ACK of y+1, establishing the connection.",
+  },
+
+  udp: {
+    scene: {
+      width: 820,
+      height: 230,
+      boxes: [
+        { x: 40, y: 80, w: 120, h: 56, title: "Sender" },
+        { x: 660, y: 80, w: 120, h: 56, title: "Receiver" },
+        { x: 300, y: 40, w: 220, h: 34, title: "src port · dst port", mono: true, accent: "l4" },
+        { x: 300, y: 90, w: 220, h: 34, title: "length · checksum", mono: true, accent: "l4" },
+      ],
+      arrows: [
+        {
+          from: [160, 108],
+          to: [660, 108],
+          label: "fire and forget — no handshake, no ACK, no retry",
+          labelDy: -8,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 150,
+          text: "8-byte header, that's the whole protocol",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 205,
+          text: "right when a late packet is worse than a lost one (voice, games) or the exchange is one round trip (DNS)",
+          size: 11,
+          opacity: 0.75,
+        },
+      ],
+    },
+    caption:
+      "UDP adds just four fields in an 8-byte header — ports, length, checksum — and nothing else. No connection, no reliability: the application chooses.",
+    summary:
+      "A sender transmits UDP datagrams to a receiver with no handshake, acknowledgment, or retransmission; the entire header is 8 bytes: source port, destination port, length, and checksum.",
+  },
+
+  quic: {
+    scene: {
+      width: 820,
+      height: 240,
+      boxes: [
+        { x: 250, y: 24, w: 320, h: 40, title: "one QUIC connection (over UDP)", accent: "l4" },
+        { x: 60, y: 110, w: 200, h: 48, title: "Stream 1", lines: ["delivers"] },
+        {
+          x: 310,
+          y: 110,
+          w: 200,
+          h: 48,
+          title: "Stream 2 — packet lost",
+          lines: ["waits"],
+          accent: "l1",
+        },
+        { x: 560, y: 110, w: 200, h: 48, title: "Stream 3", lines: ["delivers"] },
+      ],
+      arrows: [
+        { from: [340, 64], to: [160, 110] },
+        { from: [410, 64], to: [410, 110] },
+        { from: [480, 64], to: [660, 110] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 200,
+          text: "independent streams: a loss in stream 2 never blocks 1 or 3 (TCP's head-of-line blocking, gone)",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 224,
+          text: "+ 1-RTT handshake with TLS built in · connection IDs survive Wi-Fi→cellular",
+          size: 11,
+          opacity: 0.7,
+        },
+      ],
+    },
+    caption:
+      "QUIC multiplexes independent streams over one UDP connection, so a lost packet stalls only its own stream — eliminating TCP's transport-level head-of-line blocking.",
+    summary:
+      "One QUIC connection carries three independent streams; a lost packet in stream 2 delays only stream 2, while streams 1 and 3 keep delivering.",
+  },
+
+  // ─────────────────────────── Layer 5 ───────────────────────────
+  websocket: {
+    scene: {
+      width: 820,
+      height: 240,
+      boxes: [
+        { x: 90, y: 30, w: 120, h: 44, title: "Browser" },
+        { x: 610, y: 30, w: 120, h: 44, title: "Server" },
+      ],
+      arrows: [
+        { from: [210, 95], to: [610, 95], label: "GET /chat — Upgrade: websocket", labelDy: -8 },
+        {
+          from: [610, 135],
+          to: [210, 135],
+          label: "101 Switching Protocols",
+          labelDy: -8,
+          dashed: true,
+        },
+        {
+          from: [210, 180],
+          to: [610, 180],
+          label: "frames — both directions, any time",
+          labelDy: -8,
+          both: true,
+          accent: "l5",
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 222,
+          text: "starts as HTTP (passes firewalls), then the same TCP connection becomes a full-duplex frame channel",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "WebSocket begins as an HTTP request asking to Upgrade; after 101 Switching Protocols, the same connection carries frames in both directions at any time.",
+    summary:
+      "A browser sends an HTTP GET with Upgrade: websocket; the server replies 101 Switching Protocols; the connection then carries full-duplex frames either direction.",
+  },
+
+  grpc: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 30, y: 40, w: 160, h: 54, title: "Unary", lines: ["1 req → 1 resp"], accent: "l5" },
+        {
+          x: 230,
+          y: 40,
+          w: 160,
+          h: 54,
+          title: "Server stream",
+          lines: ["1 req → many"],
+          accent: "l5",
+        },
+        { x: 430, y: 40, w: 160, h: 54, title: "Client stream", lines: ["many → 1"], accent: "l5" },
+        {
+          x: 630,
+          y: 40,
+          w: 160,
+          h: 54,
+          title: "Bidirectional",
+          lines: ["many ↔ many"],
+          accent: "l5",
+        },
+        {
+          x: 280,
+          y: 165,
+          w: 260,
+          h: 50,
+          title: "all over one HTTP/2 connection",
+          lines: ["multiplexed streams"],
+        },
+      ],
+      arrows: [
+        { from: [110, 94], to: [360, 165] },
+        { from: [310, 94], to: [400, 165] },
+        { from: [510, 94], to: [430, 165] },
+        { from: [710, 94], to: [470, 165] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 238,
+          text: "typed .proto contracts + four call shapes + deadlines that propagate down the call chain",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "gRPC offers four call shapes — unary, server-streaming, client-streaming, and bidirectional — all multiplexed over one HTTP/2 connection.",
+    summary:
+      "gRPC supports unary (one request, one response), server-streaming, client-streaming, and bidirectional calls, all carried as multiplexed streams over a single HTTP/2 connection.",
+  },
+
+  sip: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 40, y: 110, w: 120, h: 54, title: "Alice" },
+        { x: 350, y: 30, w: 130, h: 48, title: "SIP proxies", accent: "l5" },
+        { x: 660, y: 110, w: 120, h: 54, title: "Bob" },
+      ],
+      arrows: [
+        { from: [160, 120], to: [350, 60], label: "INVITE", labelDy: -8, accent: "l5" },
+        { from: [480, 60], to: [660, 120], label: "INVITE", labelDy: -8, accent: "l5" },
+        {
+          from: [160, 150],
+          to: [660, 150],
+          label: "RTP media — flows directly (the voice)",
+          labelDy: 18,
+          both: true,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 215,
+          text: "signaling (SIP) sets up the call through proxies; media (RTP) flows directly between endpoints",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 238,
+          text: "“call connects but no audio” = signaling worked, media path (NAT) didn't",
+          size: 11,
+          opacity: 0.7,
+        },
+      ],
+    },
+    caption:
+      "SIP signaling sets up and tears down the call (often through proxies); the actual audio flows separately over RTP, usually directly between the endpoints.",
+    summary:
+      "Alice's SIP INVITE travels through proxies to Bob to establish the call, but the RTP media stream carrying the voice flows directly between Alice and Bob.",
+  },
+
+  // ─────────────────────────── Layer 6 ───────────────────────────
+  tls: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 90, y: 30, w: 120, h: 44, title: "Client" },
+        { x: 610, y: 30, w: 120, h: 44, title: "Server" },
+      ],
+      arrows: [
+        {
+          from: [210, 92],
+          to: [610, 92],
+          label: "ClientHello + key share",
+          labelDy: -8,
+          accent: "l6",
+        },
+        {
+          from: [610, 134],
+          to: [210, 134],
+          label: "ServerHello + key share + {cert}",
+          labelDy: -8,
+          accent: "l6",
+          dashed: true,
+        },
+        {
+          from: [210, 176],
+          to: [610, 176],
+          label: "Finished — keys match",
+          labelDy: -8,
+          accent: "l6",
+        },
+        { from: [210, 210], to: [610, 210], label: "encrypted application data", labelDy: -8 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 240,
+          text: "one round trip · ephemeral keys = forward secrecy · the certificate itself is encrypted (TLS 1.3)",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "TLS 1.3 completes in one round trip: the client's first message already carries a key share, the server's reply authenticates (encrypted), and data flows.",
+    summary:
+      "The client sends ClientHello with a key share; the server replies with its key share and an encrypted certificate; both derive matching keys, and encrypted application data flows after one round trip.",
+  },
+
+  serialization: {
+    scene: {
+      width: 820,
+      height: 230,
+      boxes: [
+        { x: 320, y: 24, w: 180, h: 46, title: "{ id: 300 }", mono: true },
+        {
+          x: 60,
+          y: 120,
+          w: 300,
+          h: 56,
+          title: "JSON (text, self-describing)",
+          lines: ['{"id":300}  — 10 bytes'],
+        },
+        {
+          x: 470,
+          y: 120,
+          w: 300,
+          h: 56,
+          title: "Protobuf (binary, schema)",
+          lines: ["08 AC 02  — 3 bytes"],
+          accent: "l6",
+        },
+      ],
+      arrows: [
+        { from: [380, 70], to: [210, 120], label: "name travels" },
+        { from: [440, 70], to: [620, 120], label: "field #1 only", accent: "l6" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 205,
+          text: "the shared schema is the compression: protobuf sends numbered tags, not field names",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "The same value encodes very differently: JSON carries field names as text; Protocol Buffers carries numbered tags against a shared schema — far smaller, but opaque without the schema.",
+    summary:
+      "The object { id: 300 } serializes to 10 bytes of JSON text including the field name, or to 3 bytes of Protocol Buffers binary using a numbered tag from a shared schema.",
+  },
+
+  compression: {
+    scene: {
+      width: 820,
+      height: 220,
+      boxes: [
+        { x: 30, y: 80, w: 150, h: 56, title: "input", lines: ["repetitive data"] },
+        { x: 250, y: 80, w: 160, h: 56, title: "LZ77", lines: ["repeats → refs"], accent: "l6" },
+        {
+          x: 470,
+          y: 80,
+          w: 160,
+          h: 56,
+          title: "Huffman",
+          lines: ["frequent → short"],
+          accent: "l6",
+        },
+        { x: 690, y: 80, w: 100, h: 56, title: "DEFLATE", lines: ["gzip"] },
+      ],
+      arrows: [
+        { from: [180, 108], to: [250, 108] },
+        { from: [410, 108], to: [470, 108] },
+        { from: [630, 108], to: [690, 108] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 40,
+          text: "two ideas from the 1950s–70s, stacked, carry a third of the web",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 185,
+          text: "dictionary matching + entropy coding = DEFLATE (gzip, PNG, zip); Brotli & Zstandard refine both",
+          size: 11,
+          opacity: 0.75,
+        },
+      ],
+    },
+    caption:
+      "DEFLATE — the engine inside gzip, PNG, and zip — stacks LZ77 dictionary matching (collapse repeats) with Huffman entropy coding (short codes for frequent symbols).",
+    summary:
+      "Compression pipelines repetitive input through LZ77 (replacing repeats with back-references) then Huffman coding (short codes for frequent symbols), combined as DEFLATE.",
+  },
+
+  // ─────────────────────────── Layer 7 ───────────────────────────
+  http: {
+    scene: {
+      width: 820,
+      height: 240,
+      boxes: [
+        {
+          x: 60,
+          y: 70,
+          w: 300,
+          h: 90,
+          title: "Request",
+          lines: ["GET /index.html HTTP/1.1", "Host: example.com", "Accept: text/html"],
+          accent: "l7",
+        },
+        {
+          x: 460,
+          y: 70,
+          w: 300,
+          h: 90,
+          title: "Response",
+          lines: ["HTTP/1.1 200 OK", "Content-Type: text/html", "Cache-Control · ETag"],
+          accent: "l7",
+        },
+      ],
+      arrows: [
+        { from: [360, 100], to: [460, 100], label: "method + path" },
+        { from: [460, 135], to: [360, 135], label: "status + body", dashed: true },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 200,
+          text: "stateless text protocol · same semantics across HTTP/1.1 → /2 → /3, only the transport changed",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "An HTTP request is a method, path, and headers; a response is a status code, headers, and body. The semantics have outlived three transports.",
+    summary:
+      "An HTTP request (method, path, Host and Accept headers) is met by a response (status line, Content-Type, caching headers, and body); the message semantics are stable across HTTP versions.",
+  },
+
+  dns: {
+    scene: {
+      width: 820,
+      height: 250,
+      boxes: [
+        { x: 30, y: 100, w: 110, h: 50, title: "Stub", lines: ["your device"] },
+        { x: 220, y: 100, w: 130, h: 50, title: "Resolver", lines: ["recursive"], accent: "l7" },
+        { x: 460, y: 24, w: 130, h: 44, title: "Root" },
+        { x: 460, y: 100, w: 130, h: 44, title: ".com TLD" },
+        { x: 460, y: 176, w: 130, h: 44, title: "Authoritative" },
+      ],
+      arrows: [
+        { from: [140, 125], to: [220, 125], label: "example.com?", labelDy: -8 },
+        { from: [350, 110], to: [460, 50], label: "ask root", labelDy: -6 },
+        { from: [350, 125], to: [460, 122], label: "→ .com" },
+        { from: [350, 140], to: [460, 192], label: "→ authoritative", labelDy: 16 },
+        { from: [460, 198], to: [350, 140], dashed: true, accent: "l7" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 240,
+          text: "the resolver walks root → TLD → authoritative, then caches by TTL — most lookups never leave the cache",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "A recursive resolver walks the delegation tree — root, then TLD, then authoritative — and caches every answer by its TTL, so most lookups are served locally.",
+    summary:
+      "A stub resolver asks a recursive resolver for example.com; the resolver queries the root, then the .com TLD, then the authoritative server, caching the answer by TTL.",
+  },
+
+  ssh: {
+    scene: {
+      width: 820,
+      height: 240,
+      boxes: [
+        {
+          x: 260,
+          y: 30,
+          w: 300,
+          h: 40,
+          title: "Connection — channels (shell, forwards, sftp)",
+          accent: "l7",
+        },
+        {
+          x: 260,
+          y: 90,
+          w: 300,
+          h: 40,
+          title: "Authentication — public key proves you",
+          accent: "l6",
+        },
+        {
+          x: 260,
+          y: 150,
+          w: 300,
+          h: 40,
+          title: "Transport — encrypt + verify server host key",
+          accent: "l4",
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 215,
+          text: "three sub-protocols, bottom-up: secure pipe → prove identity → multiplex channels (TCP/22)",
+          size: 11,
+          opacity: 0.8,
+        },
+        { x: 130, y: 110, text: "stacked", size: 11, opacity: 0.5 },
+        { x: 690, y: 110, text: "one TCP conn", size: 11, opacity: 0.5 },
+      ],
+    },
+    caption:
+      "SSH layers three sub-protocols: a transport that encrypts and authenticates the server, user authentication (ideally public-key), and a connection layer multiplexing channels.",
+    summary:
+      "SSH is built from three stacked sub-protocols: transport (encryption and server host-key verification), user authentication (public-key challenge), and connection (multiplexed channels like shells and port forwards).",
+  },
+
+  smtp: {
+    scene: {
+      width: 820,
+      height: 230,
+      boxes: [
+        { x: 20, y: 90, w: 120, h: 54, title: "Your client" },
+        { x: 230, y: 90, w: 130, h: 54, title: "Your MTA", accent: "l7" },
+        { x: 450, y: 90, w: 130, h: 54, title: "Their MTA", accent: "l7" },
+        { x: 670, y: 90, w: 120, h: 54, title: "Recipient" },
+      ],
+      arrows: [
+        { from: [140, 117], to: [230, 117], label: "SMTP submit :587", labelDy: -8 },
+        { from: [360, 117], to: [450, 117], label: "SMTP relay :25 (MX)", labelDy: -8 },
+        { from: [580, 117], to: [670, 117], label: "IMAP :993", labelDy: -8, dashed: true },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 185,
+          text: "push to deliver (SMTP), pull to read (IMAP); the handoff is a DNS MX lookup · SPF/DKIM/DMARC authenticate",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Email is a relay race: SMTP pushes mail from client to your server to theirs (found via DNS MX), and IMAP lets the recipient pull it on their own schedule.",
+    summary:
+      "A client submits mail via SMTP on port 587 to its MTA, which relays via SMTP port 25 (using a DNS MX lookup) to the recipient's MTA; the recipient retrieves it via IMAP on port 993.",
+  },
+};
+
+/** Render the diagram registered for a protocol slug. */
+export function ProtocolDiagram({ id }: { id: string }) {
+  const d = PROTOCOL_DIAGRAMS[id];
+  if (!d) return null;
+  return <RoughScene scene={d.scene} caption={d.caption} summary={d.summary} />;
+}

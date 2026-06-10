@@ -12,6 +12,8 @@ diagnostics. It's small, ancient, and load-bearing: the two tools every engineer
 (`ping`, `traceroute`) and the mechanism modern networking quietly depends on (Path MTU discovery)
 are all ICMP.
 
+<ProtocolDiagram id="icmp" />
+
 ## The message types that matter
 
 Each ICMP message is a **type** + **code** + the first bytes of the packet that provoked it (so

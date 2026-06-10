@@ -1,7 +1,8 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PROTOCOLS, getProtocol, protocolsForLayer } from "./protocols";
+import { PROTOCOL_DIAGRAMS } from "../components/diagrams/ProtocolDiagram";
 
 describe("PROTOCOLS registry integrity", () => {
   it("has unique, url-safe slugs", () => {
@@ -44,5 +45,28 @@ describe("PROTOCOLS registry integrity", () => {
   it("getProtocol round-trips", () => {
     expect(getProtocol("bgp")?.name).toBe("BGP");
     expect(getProtocol("nope")).toBeUndefined();
+  });
+
+  it("has a hand-drawn diagram for every protocol, each embedded in its page", () => {
+    const diagramSlugs = Object.keys(PROTOCOL_DIAGRAMS).sort();
+    const registrySlugs = PROTOCOLS.map((p) => p.slug).sort();
+    expect(diagramSlugs).toEqual(registrySlugs);
+
+    const dir = join(process.cwd(), "content", "protocols");
+    for (const p of PROTOCOLS) {
+      const src = readFileSync(join(dir, `${p.slug}.mdx`), "utf8");
+      expect(src, `${p.slug}.mdx embeds its diagram`).toContain(
+        `<ProtocolDiagram id="${p.slug}" />`,
+      );
+    }
+  });
+
+  it("every diagram has a non-empty caption and screen-reader summary", () => {
+    for (const [slug, d] of Object.entries(PROTOCOL_DIAGRAMS)) {
+      expect(d.caption.length, `${slug} caption`).toBeGreaterThan(20);
+      expect(d.summary.length, `${slug} summary`).toBeGreaterThan(20);
+      expect(d.scene.width).toBeGreaterThan(0);
+      expect(d.scene.height).toBeGreaterThan(0);
+    }
   });
 });
