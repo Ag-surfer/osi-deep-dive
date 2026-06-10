@@ -119,6 +119,37 @@ in-network fragmentation entirely** — only the source host may fragment.
   *Time Exceeded*, revealing the path hop by hop. (A beautiful hack: the loop-prevention field becomes
   a network-mapping tool.)
 
+## NAT: the workaround that ate the internet
+
+Private addresses (`192.168.x.x`, `10.x.x.x`) can't appear on the public internet — so nearly every
+home and office sits behind **Network Address Translation**. The NAT router rewrites each outgoing
+packet's private source address (and usually the source port) to its own public address, records the
+mapping in a **translation table**, and reverses the rewrite for replies.
+
+<WorkedExample title="One public address, a whole household">
+Your laptop (`192.168.1.23`) and your phone (`192.168.1.40`) both load the same site through a router
+whose public address is `203.0.113.7`:
+
+1. Laptop sends `192.168.1.23:51000 → 198.51.100.10:443`. Router rewrites to
+   `203.0.113.7:62001 → 198.51.100.10:443` and records `62001 ↔ 192.168.1.23:51000`.
+2. Phone sends `192.168.1.40:49000 → 198.51.100.10:443`. Router picks a *different* public port:
+   `203.0.113.7:62002`, records `62002 ↔ 192.168.1.40:49000`.
+3. Replies arrive addressed to ports `62001`/`62002`; the table routes each back to the right device.
+
+The server sees one address making two connections. The ports — a Layer 4 concept — are what let one
+public IPv4 address multiplex an entire network, which is why this form is called **PAT** (port
+address translation), and why NAT is best described as a Layer 3 function with its hand in Layer 4's
+pocket.
+</WorkedExample>
+
+<Callout variant="warning" title="What NAT breaks">
+NAT only creates mappings for connections initiated **from inside** — unsolicited inbound connections
+have no table entry and die at the router. That accidental firewall is why peer-to-peer apps, game
+consoles, and VoIP need port forwarding, UPnP, or hole-punching (STUN/TURN), and why "it works one
+way but not the other" is a classic NAT symptom. NAT also breaks the end-to-end principle: the address
+your peer sees is not the address you have.
+</Callout>
+
 ## IPv6: why, and what changed
 
 IPv4's 32 bits allow ~4.3 billion addresses — long since exhausted. **IPv6 uses 128-bit addresses**

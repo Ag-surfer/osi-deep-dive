@@ -5,19 +5,29 @@ import Link from "next/link";
 import { GLOSSARY } from "@/lib/glossary";
 import { LAYERS } from "@/lib/layers";
 
-/** Searchable glossary with per-term layer tags linking back to layer pages. */
+/** Layer filter values: null = all, 0 = cross-cutting, 1–7 = that layer. */
+type LayerFilter = number | null;
+
+/** Searchable glossary with layer-filter chips and per-term layer tags linking back to layer pages. */
 export function GlossaryList() {
   const [q, setQ] = useState("");
+  const [layerFilter, setLayerFilter] = useState<LayerFilter>(null);
 
   const entries = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const list = needle
-      ? GLOSSARY.filter(
-          (e) => e.term.toLowerCase().includes(needle) || e.def.toLowerCase().includes(needle),
-        )
-      : GLOSSARY;
+    const list = GLOSSARY.filter((e) => {
+      if (layerFilter !== null && e.layer !== layerFilter) return false;
+      if (!needle) return true;
+      return e.term.toLowerCase().includes(needle) || e.def.toLowerCase().includes(needle);
+    });
     return [...list].sort((a, b) => a.term.localeCompare(b.term));
-  }, [q]);
+  }, [q, layerFilter]);
+
+  const chips: { value: LayerFilter; label: string; color?: string }[] = [
+    { value: null, label: "All" },
+    ...LAYERS.map((l) => ({ value: l.number, label: `L${l.number}`, color: l.color })),
+    { value: 0, label: "Cross-cutting" },
+  ];
 
   return (
     <div>
@@ -30,7 +40,39 @@ export function GlossaryList() {
         className="w-full rounded-md border px-3 py-2 text-sm"
         style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-soft)" }}
       />
-      <p className="mt-2 text-xs" style={{ color: "var(--fg-muted)" }}>
+      <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Filter by layer">
+        {chips.map((chip) => {
+          const active = layerFilter === chip.value;
+          return (
+            <button
+              key={chip.label}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setLayerFilter(chip.value)}
+              className="rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors"
+              style={
+                active
+                  ? chip.color
+                    ? {
+                        backgroundColor: chip.color,
+                        borderColor: chip.color,
+                        color: "var(--on-accent)",
+                      }
+                    : // No layer color (All / Cross-cutting): invert fg/bg for contrast.
+                      {
+                        backgroundColor: "var(--fg)",
+                        borderColor: "var(--fg)",
+                        color: "var(--bg)",
+                      }
+                  : { borderColor: chip.color ?? "var(--border)", color: "var(--fg-muted)" }
+              }
+            >
+              {chip.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-xs" style={{ color: "var(--fg-muted)" }} aria-live="polite">
         {entries.length} term{entries.length === 1 ? "" : "s"}
       </p>
 
@@ -68,12 +110,12 @@ export function GlossaryList() {
             </div>
           );
         })}
-        {entries.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
-            No terms match &ldquo;{q}&rdquo;.
-          </p>
-        ) : null}
       </dl>
+      {entries.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+          No terms match &ldquo;{q}&rdquo;.
+        </p>
+      ) : null}
     </div>
   );
 }

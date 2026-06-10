@@ -43,6 +43,28 @@ trade-offs:
 | **Protocol Buffers** | Binary, schema-first | Compact and fast; needs the schema to read |
 | **ASN.1 (DER)** | Binary, formally specified | Used in X.509 certificates, LDAP, telecom |
 
+## Byte order: the oldest translation problem
+
+Multi-byte numbers have two natural layouts: **big-endian** (most significant byte first — how humans
+write numbers) and **little-endian** (least significant byte first — how x86 and most ARM systems
+store them). The 32-bit number `0x0A0B0C0D` is four bytes — but *which order do they travel in?*
+
+<WorkedExample title="The same number, two machines, one wire">
+1. A little-endian x86 sender holds `0x0A0B0C0D` in memory as `0D 0C 0B 0A`.
+2. Network protocols define **network byte order = big-endian** (set down alongside
+   <RFCRef n={791}>IPv4</RFCRef> itself), so the sender must transmit `0A 0B 0C 0D`.
+3. Every numeric header field — ports, lengths, sequence numbers — goes through `htons()`/`htonl()`
+   ("host to network short/long") on the way out and `ntohs()`/`ntohl()` on the way in.
+
+Skip the conversion and port `80` (`0x0050`) is read as port `20480` (`0x5000`) — a bug every
+network programmer writes exactly once.
+</WorkedExample>
+
+This is the Presentation layer's purest case: both machines hold the *same value*; only its
+**representation** differs, and somebody must own the translation. Serialization formats make the
+same decision for you — JSON sidesteps it with text; Protocol Buffers specifies little-endian and
+shields you from it.
+
 ## Compression and encryption
 
 - **Compression** shrinks data before it hits the wire — lossless (gzip, Brotli for HTTP; PNG) or
@@ -58,6 +80,24 @@ TLS doesn't care whether it's wrapping HTTP, SMTP, or IMAP — it transforms the
 whatever bytes pass through (encrypting them) without understanding their meaning. That representation
 transformation is the essence of Layer 6, even though TLS spans session and presentation concerns.
 </Callout>
+
+The negotiation itself is worth seeing. In **TLS 1.3** a single round trip agrees on cipher suites,
+exchanges keys, and authenticates the server before a byte of application data flows:
+
+<SequenceDiagram
+  actors={["Client", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "ClientHello — supported ciphers + key share" },
+    { from: 1, to: 0, label: "ServerHello — chosen cipher + key share, certificate", dashed: true },
+    { from: 0, to: 1, label: "Finished — both sides derive the same keys" },
+    { from: 0, to: 1, label: "Application data, now encrypted" },
+  ]}
+  caption="TLS 1.3's one-round-trip handshake: negotiate the representation (cipher), prove identity (certificate), then transform every byte that follows."
+/>
+
+When this handshake fails — an expired certificate, no cipher in common, a hostname mismatch — the
+TCP connection is alive and the application never gets a chance to run: a failure that lives
+precisely *between* Layers 4 and 7.
 
 ## Failure modes & troubleshooting
 

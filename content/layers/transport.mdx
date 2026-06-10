@@ -80,10 +80,29 @@ audio/video, and gaming, where a late packet is worse than a lost one.
 
 <NamedHeader id="udp" />
 
-<Callout variant="insight" title="QUIC: the best of both">
-**QUIC** (<RFCRef n={9000} />, the basis of HTTP/3) runs reliability, ordering, and congestion control
-*over UDP* in user space — adding TLS 1.3 and eliminating head-of-line blocking between streams. It's
-Transport-layer logic that sidesteps the ossified TCP path through the internet.
+## QUIC: transport, reinvented in user space
+
+**QUIC** (<RFCRef n={9000} />, the foundation of HTTP/3) is what you get when engineers redesign the
+Transport layer with thirty years of TCP lessons — and then have to *ship* it on an internet whose
+middleboxes only pass TCP and UDP. The answer: build it **on top of UDP**, in user space.
+
+| Problem with TCP | QUIC's answer |
+| --- | --- |
+| Separate TCP + TLS handshakes (2–3 RTTs) | Combined transport + TLS 1.3 setup (1 RTT, 0-RTT on resume) |
+| One lost packet stalls *all* data behind it (head-of-line blocking) | Independent **streams** — loss in one stream never blocks another |
+| A connection is pinned to one IP/port 4-tuple | **Connection IDs** — survive switching from Wi-Fi to cellular mid-download |
+| Upgrading TCP means upgrading every OS kernel and middlebox | User-space implementation — browsers ship improvements in weeks |
+
+The head-of-line fix matters most: a web page loads dozens of resources, and with HTTP/2-over-TCP a
+single lost packet freezes *all* of them, because TCP guarantees one strictly ordered byte stream.
+QUIC's per-stream ordering means one unlucky image stalls only itself.
+
+<Callout variant="insight" title="Ossification: why QUIC hides from the network">
+Decades of firewalls and NATs grew opinions about what TCP "should" look like, making the TCP header
+effectively unchangeable — the internet's protocols **ossified**. QUIC encrypts almost its entire
+header so middleboxes *can't* inspect or meddle with it, deliberately keeping tomorrow's transport
+evolvable. A protocol designed so the network can't see it: that's a profound lesson about where
+flexibility survives in a layered system.
 </Callout>
 
 ## Failure modes & troubleshooting

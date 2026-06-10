@@ -31,7 +31,7 @@ and loses count. Line codes solve clock recovery and DC balance:
 | **NRZI** | *Transition* = 1, no transition = 0 | Robust to polarity inversion |
 | **Manchester** | Mid-bit transition encodes value (used in 10BASE-T) | Self-clocking, but needs 2× bandwidth |
 | **4B/5B + MLT-3** | Map 4 data bits → 5 code bits to guarantee transitions | Used in 100BASE-TX; ~80% efficiency |
-| **8b/10b** | 8 bits → 10 symbols, DC-balanced | Used in Gigabit/PCIe/SATA |
+| **8b/10b** | 8 bits → 10 symbols, DC-balanced | Used in gigabit fiber (1000BASE-X)/PCIe/SATA |
 | **PAM-4** | 4 voltage levels carry 2 bits/symbol | Doubles rate (used in 400G+ Ethernet) |
 
 <SignalWire />
@@ -87,6 +87,28 @@ can lock its clock, followed by a **Start Frame Delimiter** that says "the frame
 Pure Layer-1 devices are "dumb": **repeaters** regenerate a degraded signal, and **hubs** are
 multi-port repeaters that blindly copy bits to every port (one collision domain — which is why they're
 obsolete, replaced by Layer-2 switches).
+
+| Medium | Typical reach | Strengths | Watch out for |
+| --- | --- | --- | --- |
+| Twisted pair (Cat 6a) | 100 m | Cheap, easy to terminate, PoE | Crosstalk, EMI near power runs |
+| Multi-mode fiber | ~550 m | Cheap optics for short hops | Modal dispersion limits distance |
+| Single-mode fiber | tens of km | Enormous bandwidth, EMI-immune | Costlier optics, fragile bend radius |
+| RF (Wi-Fi, 5G) | room → km | No cables at all | Shared medium, interference, eavesdropping |
+
+## Autonegotiation: how both ends agree
+
+Plug in a cable and the two transceivers hold a sub-second conversation — exchanging **link pulses**
+that advertise the speeds and duplex modes each supports — then commit to the best common option.
+That's why a gigabit laptop on an old switch silently runs at 100 Mb/s, and why a damaged pair makes
+a "gigabit" run negotiate *down* rather than fail: 1000BASE-T needs all four twisted pairs, while
+100BASE-TX needs only two.
+
+<Callout variant="warning" title="The classic autonegotiation trap">
+Hard-coding speed/duplex on one end while the other autonegotiates is the canonical self-inflicted
+wound: the autonegotiating side can't hear preferences from a silent partner, falls back to
+**half-duplex**, and the result is a working-but-miserable link riddled with late collisions. If a
+link is mysteriously slow but *up*, check that both ends agree on what they negotiated.
+</Callout>
 
 ## Failure modes & troubleshooting
 

@@ -35,15 +35,16 @@ protocol.
 | OSI session idea | Modern realization |
 | --- | --- |
 | Session establishment/teardown | TCP connection; TLS handshake; WebSocket open/close |
-| Resuming without redoing all setup | **TLS session resumption** (session IDs / tickets, 0-RTT in TLS 1.3) |
+| Resuming without redoing all setup | **TLS session resumption** (session tickets/PSKs; 0-RTT in TLS 1.3) |
 | Authenticated, stateful dialogue | HTTP cookies + server-side sessions; OAuth tokens |
 | Remote procedure dialogue | **RPC** frameworks (gRPC, JSON-RPC) managing call/stream lifecycles |
 | Real-time call setup/teardown | **SIP** establishing and ending media sessions |
 
 <Callout variant="history" title="Why TLS resumption is the textbook example">
-A full TLS handshake costs round trips and expensive public-key crypto. **Session resumption** lets a
-returning client reference a prior session and skip most of it — exactly the OSI Session layer's
-"checkpoint and resume" idea, implemented where it was actually needed.
+A full TLS handshake costs expensive public-key crypto and certificate validation. **Session
+resumption** lets a returning client reference a prior session and skip most of that work — and TLS
+1.3's 0-RTT mode can even send application data with the very first packet. It's exactly the OSI
+Session layer's "checkpoint and resume" idea, implemented where it was actually needed.
 </Callout>
 
 <SequenceDiagram
@@ -53,14 +54,46 @@ returning client reference a prior session and skip most of it — exactly the O
     { from: 1, to: 0, label: "ServerHello — resume accepted", dashed: true },
     { from: 0, to: 1, label: "Finished — encrypted app data flows" },
   ]}
-  caption="TLS 1.3 session resumption: a remembered session re-establishes a secure dialogue in fewer round trips — Layer-5 thinking in practice."
+  caption="TLS 1.3 session resumption: a returning client re-establishes a secure dialogue without re-sending certificates or redoing public-key authentication (and 0-RTT can carry data immediately) — Layer-5 thinking in practice."
 />
+
+## WebSocket: a session protocol you use every day
+
+If you want to watch Layer-5 thinking alive in the modern web, look at **WebSocket**
+(<RFCRef n={6455} />). A chat app or live dashboard needs a long-lived, two-way *dialogue* — but HTTP
+is request/response. WebSocket fixes this with an explicit session lifecycle: an HTTP request asks to
+**Upgrade**, the server agrees, and the connection transforms into a persistent full-duplex channel
+with its own framing, ping/pong keepalives, and an orderly **Close handshake**.
+
+<SequenceDiagram
+  actors={["Browser", "Server"]}
+  steps={[
+    { from: 0, to: 1, label: "GET /chat — Upgrade: websocket" },
+    { from: 1, to: 0, label: "101 Switching Protocols", dashed: true },
+    { from: 0, to: 1, label: "frames flow both ways, any time …" },
+    { from: 1, to: 0, label: "… server pushes without being asked", dashed: true },
+    { from: 0, to: 1, label: "Close frame → orderly teardown" },
+  ]}
+  caption="A WebSocket session: explicit establishment, a managed full-duplex dialogue with keepalives, and graceful release — the OSI Session layer's job description, verbatim."
+/>
+
+Establishment, dialog management, keepalive, graceful release — that's the OSI Session layer's
+service list, implemented in 2011 because the web genuinely needed it. The lesson of Layer 5 isn't a
+protocol to memorize; it's that *someone must do these jobs*, and recognizing them when you see them.
 
 ## A note on "stateful" vs. "stateless"
 
 Many modern systems deliberately push session state to the *edges* (cookies, JWT tokens) so servers can
 stay **stateless** and scale horizontally. That's a direct engineering response to the Session layer's
 challenge: someone must remember the conversation — the design question is *who*, and *where*.
+
+<Callout variant="insight" title="The load-balancer test">
+Here's a one-question test for whether you've internalized Layer 5: *why do users get logged out when
+a web tier scales from one server to three?* Because the session lived in one server's memory, and the
+load balancer sends each request to a random server. Every fix — sticky sessions, a shared session
+store, signed tokens — is an answer to the Session layer's core question: who remembers the
+conversation?
+</Callout>
 
 ## Failure modes & troubleshooting
 

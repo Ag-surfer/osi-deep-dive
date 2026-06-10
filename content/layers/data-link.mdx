@@ -90,6 +90,30 @@ When a host knows a destination's **IP** but needs its **MAC** to build a frame,
   caption="ARP resolves an IP address to a MAC address before the first frame can be sent."
 />
 
+## Carving up and protecting the LAN: VLANs and Spanning Tree
+
+Two Layer-2 mechanisms shape every real network you'll touch:
+
+**VLANs** (IEEE 802.1Q) slice one physical switch into multiple **virtual
+LANs** — separate broadcast domains that can't hear each other even on shared hardware. A 4-byte tag
+in the Ethernet frame carries a 12-bit VLAN ID; **access ports** belong to one VLAN (the tag never
+reaches the host), while **trunk ports** carry many VLANs between switches, tags intact. Finance and
+guest Wi-Fi can share every cable and switch in the building yet be as isolated as if they were
+separate networks — crossing between them requires a router, where policy can be enforced.
+
+**Spanning Tree (STP)** solves a darker problem: Ethernet frames carry **no TTL**, so two switches
+connected in a loop will circulate a single broadcast frame *forever*, multiplying it until the LAN
+melts — a **broadcast storm**. STP lets switches elect a root, map the topology, and deliberately
+**block** redundant links, turning any physical mesh into a loop-free logical tree. The blocked links
+sit in reserve and activate when an active link fails — redundancy without loops.
+
+<Callout variant="insight" title="Why a TTL-less world needs a tree">
+IP packets carry a TTL (typically starting at 64–128) and die when it runs out; Ethernet frames never expire. That single design difference
+is why routing tolerates loops (they self-heal as packets die) while switching cannot afford even one.
+When someone plugs both ends of a cable into the same switch and the floor's network dies, you're
+watching that difference in action — and watching what STP exists to prevent.
+</Callout>
+
 ## Failure modes & troubleshooting
 
 <Callout variant="warning" title="Symptoms at Layer 2">

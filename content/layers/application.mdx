@@ -82,6 +82,36 @@ resumption can skip the handshake entirely), cutting this dramatically — a dir
 understanding what each layer adds.
 </WorkedExample>
 
+## DHCP: how a host gets on the network at all
+
+Before any of the above can happen, a freshly connected device knows *nothing* — no IP address, no
+gateway, no DNS server. **DHCP** (<RFCRef n={2131} />) bootstraps it with a four-step exchange
+nicknamed **DORA**, carried over UDP broadcast because the client doesn't yet have an address to be
+reached at:
+
+<SequenceDiagram
+  actors={["New host", "DHCP server"]}
+  steps={[
+    { from: 0, to: 1, label: "DISCOVER — broadcast: any DHCP servers out there?" },
+    { from: 1, to: 0, label: "OFFER — here's 192.168.1.23, lease 24 h", dashed: true },
+    { from: 0, to: 1, label: "REQUEST — I'd like that one, please (broadcast)" },
+    { from: 1, to: 0, label: "ACK — it's yours: gateway, mask, DNS included", dashed: true },
+  ]}
+  caption="DHCP's DORA exchange: a host with no address uses broadcast to acquire one, plus everything it needs to use the network."
+/>
+
+The ACK delivers a complete starter kit: address, subnet mask, default gateway, DNS servers, and a
+**lease** the host must renew. It's a beautiful illustration of layering's chicken-and-egg edge case —
+an Application-layer protocol whose whole job is configuring Layer 3, running before Layer 3 is
+configured, possible only because broadcast frames need no IP routing.
+
+<Callout variant="security" title="Rogue DHCP">
+Nothing authenticates a DHCP OFFER. A malicious server on the LAN that answers faster can hand out
+*itself* as gateway and DNS — silently routing every victim's traffic through an attacker box.
+Defense: **DHCP snooping** on switches, which permits OFFERs only from trusted ports. Note the layer
+interplay: a Layer-7 protocol attacked at Layer 2, defended at Layer 2.
+</Callout>
+
 ## Architectural models
 
 - **Client–server** — the dominant model (browser↔web server, mail client↔mail server). Simple,
