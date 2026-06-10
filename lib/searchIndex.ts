@@ -106,6 +106,12 @@ const STATIC_PAGES: { title: string; context: string; body: string; href: string
     href: "/modern/",
   },
   {
+    title: "Wireless: The Stack Without Wires",
+    context: "Layers 1–2, airborne",
+    body: "802.11 in depth: BSS/ESS, the three-address frame, association and the 4-way handshake, WEP to WPA3, Wi-Fi 4/5/6/7 generations, cellular scheduling vs Wi-Fi contention.",
+    href: "/wireless/",
+  },
+  {
     title: "Glossary & RFC Index",
     context: "Vocabulary",
     body: "Every networking term on the site, tagged by layer, searchable and filterable.",

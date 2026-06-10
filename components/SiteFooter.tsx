@@ -38,6 +38,9 @@ export function SiteFooter() {
             <Link href="/modern/" className="hover:text-[var(--fg)]">
               Modern
             </Link>
+            <Link href="/wireless/" className="hover:text-[var(--fg)]">
+              Wireless
+            </Link>
             <Link href="/cheat-sheet/" className="hover:text-[var(--fg)]">
               Cheat Sheet
             </Link>

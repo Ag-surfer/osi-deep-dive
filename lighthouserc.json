@@ -17,7 +17,8 @@
         "http://localhost:9009/cheat-sheet/",
         "http://localhost:9009/troubleshoot/",
         "http://localhost:9009/models/",
-        "http://localhost:9009/modern/"
+        "http://localhost:9009/modern/",
+        "http://localhost:9009/wireless/"
       ],
       "numberOfRuns": 1
     },

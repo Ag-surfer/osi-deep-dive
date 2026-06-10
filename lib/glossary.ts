@@ -273,4 +273,34 @@ export const GLOSSARY: GlossaryEntry[] = [
     layer: 0,
     def: "One stalled item holding up everything queued behind it — HTTP/1.1's ordered responses, or one lost TCP segment stalling all HTTP/2 streams.",
   },
+  {
+    term: "SSID",
+    layer: 2,
+    def: "Service Set Identifier — the human-readable Wi-Fi network name; many access points can share one SSID.",
+  },
+  {
+    term: "BSSID",
+    layer: 2,
+    def: "The MAC address identifying one access point's radio — the machine-level identity behind an SSID.",
+  },
+  {
+    term: "ESS",
+    layer: 2,
+    def: "Extended Service Set — multiple access points sharing an SSID over a (usually wired) distribution system; what a station roams across.",
+  },
+  {
+    term: "SAE",
+    layer: 2,
+    def: "Simultaneous Authentication of Equals — WPA3's password-authenticated key exchange; every password guess needs a live exchange, killing offline cracking.",
+  },
+  {
+    term: "OFDMA",
+    layer: 1,
+    def: "Orthogonal Frequency-Division Multiple Access — Wi-Fi 6/cellular technique scheduling different users onto subsets of a channel's subcarriers simultaneously.",
+  },
+  {
+    term: "Handover",
+    layer: 2,
+    def: "Cellular's network-orchestrated move between base stations mid-session — the scheduled counterpart of Wi-Fi's client-driven roaming.",
+  },
 ];
