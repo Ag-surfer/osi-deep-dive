@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function SiteFooter() {
   return (
-    <footer className="border-t" style={{ borderColor: "var(--border)" }}>
+    <footer className="border-t print:hidden" style={{ borderColor: "var(--border)" }}>
       <div
         className="mx-auto max-w-6xl px-4 py-10 text-sm sm:px-6"
         style={{ color: "var(--fg-muted)" }}
@@ -25,6 +25,12 @@ export function SiteFooter() {
             </Link>
             <Link href="/quiz/" className="hover:text-[var(--fg)]">
               Quiz
+            </Link>
+            <Link href="/interview/" className="hover:text-[var(--fg)]">
+              Interview
+            </Link>
+            <Link href="/cheat-sheet/" className="hover:text-[var(--fg)]">
+              Cheat Sheet
             </Link>
           </nav>
         </div>

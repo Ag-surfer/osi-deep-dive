@@ -11,6 +11,8 @@ const TOP = [
   { href: "/anatomy/", label: "Packet Anatomy" },
   { href: "/glossary/", label: "Glossary & RFCs" },
   { href: "/quiz/", label: "Final Quiz" },
+  { href: "/interview/", label: "Interview Prep" },
+  { href: "/cheat-sheet/", label: "Cheat Sheet" },
 ];
 
 /** Hamburger menu for small screens (the desktop nav is hidden below `sm`). */
