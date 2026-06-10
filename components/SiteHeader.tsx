@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
 import { MobileNav } from "./MobileNav";
+import { SearchDialog } from "./SearchDialog";
 
 const NAV = [
   { href: "/layers/physical/", label: "Layers" },
@@ -44,6 +45,7 @@ export function SiteHeader() {
           >
             Cheat&nbsp;Sheet
           </Link>
+          <SearchDialog />
           <ThemeToggle />
           <MobileNav />
         </div>

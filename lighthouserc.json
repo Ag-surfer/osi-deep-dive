@@ -15,7 +15,9 @@
         "http://localhost:9009/anatomy/",
         "http://localhost:9009/interview/",
         "http://localhost:9009/cheat-sheet/",
-        "http://localhost:9009/troubleshoot/"
+        "http://localhost:9009/troubleshoot/",
+        "http://localhost:9009/models/",
+        "http://localhost:9009/modern/"
       ],
       "numberOfRuns": 1
     },

@@ -97,6 +97,7 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
       "Give an example of a real technology that spans multiple layers.",
     ],
     links: [
+      { label: "The full history: why TCP/IP won", href: "/models/" },
       { label: "The Session layer's honest story", href: "/layers/session/" },
       { label: "Where TLS sits", href: "/layers/presentation/" },
     ],

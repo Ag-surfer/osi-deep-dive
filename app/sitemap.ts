@@ -13,6 +13,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/quiz/",
     "/interview/",
     "/troubleshoot/",
+    "/models/",
+    "/modern/",
     "/cheat-sheet/",
     ...LAYERS.map((l) => `/layers/${l.slug}/`),
   ];

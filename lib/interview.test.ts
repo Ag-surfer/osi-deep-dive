@@ -11,6 +11,9 @@ const VALID_ROUTES = new Set([
   "/quiz/",
   "/interview/",
   "/cheat-sheet/",
+  "/troubleshoot/",
+  "/models/",
+  "/modern/",
   ...LAYERS.map((l) => `/layers/${l.slug}/`),
 ]);
 

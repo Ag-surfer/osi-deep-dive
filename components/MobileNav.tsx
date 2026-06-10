@@ -13,6 +13,8 @@ const TOP = [
   { href: "/quiz/", label: "Final Quiz" },
   { href: "/interview/", label: "Interview Prep" },
   { href: "/troubleshoot/", label: "Troubleshooting Method" },
+  { href: "/models/", label: "OSI vs TCP/IP History" },
+  { href: "/modern/", label: "The Modern Internet" },
   { href: "/cheat-sheet/", label: "Cheat Sheet" },
 ];
 
