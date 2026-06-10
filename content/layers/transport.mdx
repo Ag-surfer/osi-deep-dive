@@ -3,6 +3,12 @@ export const sources = [
   { label: "RFC 768 — User Datagram Protocol (UDP)", href: "https://www.rfc-editor.org/rfc/rfc768.html" },
   { label: "RFC 5681 — TCP Congestion Control", href: "https://www.rfc-editor.org/rfc/rfc5681.html" },
   { label: "RFC 9000 — QUIC", href: "https://www.rfc-editor.org/rfc/rfc9000.html" },
+  { label: "RFC 6298 — Computing TCP's Retransmission Timer", href: "https://www.rfc-editor.org/rfc/rfc6298.html" },
+  { label: "RFC 2018 — TCP Selective Acknowledgment (SACK)", href: "https://www.rfc-editor.org/rfc/rfc2018.html" },
+  { label: "RFC 9438 — CUBIC for Fast and Long-Distance Networks", href: "https://www.rfc-editor.org/rfc/rfc9438.html" },
+  { label: "Cardwell et al., BBR: Congestion-Based Congestion Control (ACM Queue, 2016)", href: "https://research.google/pubs/bbr-congestion-based-congestion-control-2/" },
+  { label: "Stevens, TCP/IP Illustrated, Vol. 1", href: "https://www.pearson.com/" },
+  { label: "Kurose & Ross, Computer Networking: A Top-Down Approach, Ch. 3", href: "https://gaia.cs.umass.edu/kurose_ross/index.php" },
 ];
 
 ## Connecting processes, not just hosts
@@ -47,6 +53,45 @@ half of the stream independently.
 
 <TcpStateMachine />
 
+### The reliability toolbox: stop-and-wait to selective repeat
+
+How do you build a reliable stream on an unreliable network? The textbook ladder of **ARQ**
+(automatic repeat request) protocols, each fixing the last one's flaw:
+
+- **Stop-and-wait** — send one segment, wait for its ACK, send the next. Correct but catastrophically
+  slow: utilization is `t_transmit / (t_transmit + RTT)`, so on a 1 Gbps, 50 ms-RTT path a 1500-byte
+  segment (12 µs to transmit) keeps the link busy ≈ 0.024% of the time.
+- **Go-Back-N** — keep a *window* of N unacknowledged segments in flight. The receiver accepts only
+  in-order data; on a gap, the sender rewinds and retransmits everything from the loss onward. Simple
+  receiver, brutal on long pipes: one drop resends a whole window.
+- **Selective repeat** — the receiver buffers out-of-order segments and the sender retransmits *only*
+  the missing ones. Maximum efficiency, more bookkeeping on both ends.
+
+TCP is a pragmatic hybrid: **cumulative ACKs** ("I have everything up to byte X") like Go-Back-N,
+plus **SACK** (selective acknowledgment, RFC 2018) blocks that tell the sender exactly which later
+ranges arrived — so a modern stack retransmits selectively. **Fast retransmit** infers a specific
+loss from three duplicate ACKs without waiting for a timeout. QUIC, designed fresh, is selective
+repeat through and through.
+
+### How long do you wait? The retransmission timer
+
+Retransmission needs a timeout, and the right value is a moving target — RTTs vary by orders of
+magnitude across paths and across the life of one connection. TCP estimates continuously
+(RFC 6298), keeping an exponentially weighted moving average of the RTT (**SRTT**) *and* of its
+variability (**RTTVAR**):
+
+```
+SRTT   ← (1 − ⅛) · SRTT + ⅛ · measured_RTT
+RTTVAR ← (1 − ¼) · RTTVAR + ¼ · |SRTT − measured_RTT|
+RTO    = SRTT + 4 · RTTVAR
+```
+
+The `4 · RTTVAR` term is the insight: a *jittery* path needs a wider safety margin than a smooth one
+of the same average. Two more classics finish the design: **Karn's algorithm** — never update SRTT
+from a retransmitted segment's ACK (you can't tell which transmission it acknowledges) — and
+**exponential backoff**, doubling the RTO on each successive timeout so a congested network isn't
+hammered by impatient retransmissions.
+
 ### Flow control vs. congestion control
 
 Two different problems, often confused:
@@ -72,6 +117,29 @@ This is why a high-bandwidth, high-latency link ("long fat network") performs po
 scaling: a tiny window throttles throughput regardless of available bandwidth.
 </WorkedExample>
 
+### Beyond Reno: how congestion control evolved
+
+The slow-start/AIMD scheme above is classic **Reno** — and the internet has moved on twice:
+
+- **CUBIC** (RFC 9438, the Linux default since 2006) replaces AIMD's linear growth with a cubic
+  curve: after a loss it recovers quickly toward the previous plateau, probes gently *near* it, then
+  accelerates into new territory. Crucially, growth depends on *time since the last loss* rather than
+  ACK arrival rate, so fast, long-RTT paths aren't punished relative to short ones.
+- **BBR** (Google, 2016; v3 deployed across Google/YouTube) abandons loss as the signal entirely.
+  Loss-based control only notices congestion *after* queues overflow — meaning it actively **fills
+  buffers**, creating the latency disease called **bufferbloat**. BBR instead continuously measures
+  the path's **bottleneck bandwidth** and **minimum RTT**, paces sending at that measured bandwidth,
+  and caps data in flight near one `bandwidth × min RTT` (the BDP) — operating at the optimal point
+  with queues near-empty, and shrugging off the random (non-congestion) loss that cripples
+  Reno/CUBIC on wireless paths.
+
+<Callout variant="insight" title="The signal is the whole story">
+Three generations, three congestion signals: Reno listens for **loss**, CUBIC listens for loss but
+recovers on a **clock**, BBR listens to the **path model** itself. When an interviewer asks "what's
+wrong with loss-based congestion control?", the answer is bufferbloat: by the time loss speaks,
+every buffer on the path is already full, and your video call's latency paid for it.
+</Callout>
+
 ## UDP: thin and fast
 
 <RFCRef n={768}>UDP</RFCRef> adds almost nothing to IP — just ports and a checksum — in an **8-byte**
@@ -80,10 +148,29 @@ audio/video, and gaming, where a late packet is worse than a lost one.
 
 <NamedHeader id="udp" />
 
-<Callout variant="insight" title="QUIC: the best of both">
-**QUIC** (<RFCRef n={9000} />, the basis of HTTP/3) runs reliability, ordering, and congestion control
-*over UDP* in user space — adding TLS 1.3 and eliminating head-of-line blocking between streams. It's
-Transport-layer logic that sidesteps the ossified TCP path through the internet.
+## QUIC: transport, reinvented in user space
+
+**QUIC** (<RFCRef n={9000} />, the foundation of HTTP/3) is what you get when engineers redesign the
+Transport layer with thirty years of TCP lessons — and then have to *ship* it on an internet whose
+middleboxes only pass TCP and UDP. The answer: build it **on top of UDP**, in user space.
+
+| Problem with TCP | QUIC's answer |
+| --- | --- |
+| Separate TCP + TLS handshakes (2–3 RTTs) | Combined transport + TLS 1.3 setup (1 RTT, 0-RTT on resume) |
+| One lost packet stalls *all* data behind it (head-of-line blocking) | Independent **streams** — loss in one stream never blocks another |
+| A connection is pinned to one IP/port 4-tuple | **Connection IDs** — survive switching from Wi-Fi to cellular mid-download |
+| Upgrading TCP means upgrading every OS kernel and middlebox | User-space implementation — browsers ship improvements in weeks |
+
+The head-of-line fix matters most: a web page loads dozens of resources, and with HTTP/2-over-TCP a
+single lost packet freezes *all* of them, because TCP guarantees one strictly ordered byte stream.
+QUIC's per-stream ordering means one unlucky image stalls only itself.
+
+<Callout variant="insight" title="Ossification: why QUIC hides from the network">
+Decades of firewalls and NATs grew opinions about what TCP "should" look like, making the TCP header
+effectively unchangeable — the internet's protocols **ossified**. QUIC encrypts almost its entire
+header so middleboxes *can't* inspect or meddle with it, deliberately keeping tomorrow's transport
+evolvable. A protocol designed so the network can't see it: that's a profound lesson about where
+flexibility survives in a layered system.
 </Callout>
 
 ## Failure modes & troubleshooting
@@ -141,6 +228,17 @@ Transport-layer logic that sidesteps the ossified TCP path through the internet.
       ],
       answer: 1,
       explanation: "Throughput ≈ window/RTT. With only 64 KB in flight over a 100 ms RTT you cap near 5 Mbps. Window scaling lets the window grow to the BDP so the pipe stays full.",
+    },
+    {
+      q: "Why does BBR outperform loss-based congestion control (Reno/CUBIC) on wireless paths?",
+      options: [
+        "It retransmits faster",
+        "It models bandwidth and RTT directly, so random radio loss isn't misread as congestion",
+        "It uses larger packets",
+      ],
+      answer: 1,
+      explanation:
+        "Loss-based algorithms halve their window on any loss — but wireless links drop packets for non-congestion reasons. BBR paces at the measured bottleneck bandwidth (keeping ~1 BDP in flight), so random loss doesn't collapse throughput (and queues stay short, avoiding bufferbloat).",
     },
   ]}
 />

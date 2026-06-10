@@ -3,6 +3,8 @@ export const sources = [
   { label: "IEEE 802.1Q — VLAN tagging", href: "https://standards.ieee.org/ieee/802.1Q/" },
   { label: "RFC 826 — Address Resolution Protocol (ARP)", href: "https://www.rfc-editor.org/rfc/rfc826.html" },
   { label: "RFC 894 — IP over Ethernet", href: "https://www.rfc-editor.org/rfc/rfc894.html" },
+  { label: "Tanenbaum & Wetherall, Computer Networks, Ch. 3–4 (error detection, MAC protocols)", href: "https://www.pearson.com/" },
+  { label: "IEEE 802.11 — Wireless LAN (CSMA/CA, RTS/CTS)", href: "https://standards.ieee.org/ieee/802.11/" },
 ];
 
 ## From a bit pipe to a usable link
@@ -38,6 +40,34 @@ virtual LAN that segments one physical switch into isolated broadcast domains). 
 VLAN ID (4094 usable) and a 3-bit priority (QoS).
 </Callout>
 
+## Error detection: parity, checksums, and the power of CRC
+
+The wire flips bits — rarely on fiber, routinely on radio. The Data Link layer's defense has a clear
+hierarchy of strength:
+
+- **Parity bit** — append one bit making the count of 1s even. Catches any single-bit error; *any
+  two* flips cancel out and slip through.
+- **Internet checksum** — sum the data in 16-bit words (used by IP/TCP/UDP for speed in software).
+  Weak: reordered words and several classes of paired flips go undetected.
+- **CRC** (cyclic redundancy check) — treat the whole frame as one giant binary polynomial, divide it
+  by an agreed **generator polynomial**, and append the remainder. The receiver repeats the division:
+  a non-zero remainder means corruption. Ethernet's 32-bit FCS is exactly this.
+
+CRC's strength is mathematical, not heuristic: at Ethernet frame lengths, CRC-32 detects **all**
+errors of up to three flipped bits, and **every burst error up to 32 bits long** —
+precisely the error shape real channels produce (a noise spike corrupts a *run* of adjacent bits, not
+random isolated ones). That fit between math and physics is why CRC owns Layer 2 while the simpler
+checksum survives only where software speed once mattered.
+
+<Callout variant="insight" title="Detection vs. correction — and who retransmits">
+Detecting an error needs far less redundancy than fixing one (correction codes like **Hamming** or
+modern **FEC** must locate the flipped bit, not just notice it). Wired links choose the cheap option:
+detect, **silently drop** the frame, and let TCP's retransmission recover end-to-end. Noisy radio
+links can't afford that — Wi-Fi adds **link-layer ACKs and retransmission**, and 5G/satellite add FEC
+— because fixing errors locally beats paying a full end-to-end round trip per loss. Where recovery
+lives is an engineering choice about *where errors are cheapest to fix*.
+</Callout>
+
 ## Media access control: who transmits when?
 
 On a shared medium, two stations transmitting at once **collide**. Two classic strategies:
@@ -49,6 +79,28 @@ On a shared medium, two stations transmitting at once **collide**. Two classic s
   them — random backoff before sending, and optional RTS/CTS reservation.
 
 <CsmaCdTimeline />
+
+### Why radio is harder: hidden terminals
+
+Wi-Fi can't simply reuse Ethernet's trick, for a physical reason: a radio **cannot hear a collision
+while transmitting** (its own signal drowns out everything else), and worse, carrier sensing itself
+breaks down. Picture laptops A and C on opposite sides of access point B, each in range of B but not
+of each other. A senses the air, hears silence, and transmits — while C, equally convinced the
+channel is free, does the same. Their frames collide *at B*, and neither sender ever knows. A and C
+are **hidden terminals** to each other.
+
+802.11's answers stack up: **CSMA/CA** waits a random backoff *before* transmitting (avoidance, since
+detection is impossible); every unicast frame gets a **link-layer ACK**, so a collision is at least
+*discovered* and retransmitted locally; and the optional **RTS/CTS** handshake lets a sender reserve
+the channel — the short CTS from the access point is heard by *everyone in the AP's range*, including
+stations the sender can't hear, silencing them for exactly the reserved duration.
+
+<Callout variant="note" title="The exposed-terminal twin">
+The mirror problem: B transmitting to A makes C (in B's range) stay silent even though C's intended
+receiver D would hear C perfectly. Hidden terminals cause collisions; **exposed terminals** waste
+capacity. Together they're why "just sense the carrier" — sufficient for a wire — needed a decade of
+MAC-protocol research to survive contact with radio.
+</Callout>
 
 <Callout variant="history" title="Why collisions are now history">
 Modern switched, full-duplex Ethernet gives every device its own dedicated collision-free link.
@@ -89,6 +141,30 @@ When a host knows a destination's **IP** but needs its **MAC** to build a frame,
   ]}
   caption="ARP resolves an IP address to a MAC address before the first frame can be sent."
 />
+
+## Carving up and protecting the LAN: VLANs and Spanning Tree
+
+Two Layer-2 mechanisms shape every real network you'll touch:
+
+**VLANs** (IEEE 802.1Q) slice one physical switch into multiple **virtual
+LANs** — separate broadcast domains that can't hear each other even on shared hardware. A 4-byte tag
+in the Ethernet frame carries a 12-bit VLAN ID; **access ports** belong to one VLAN (the tag never
+reaches the host), while **trunk ports** carry many VLANs between switches, tags intact. Finance and
+guest Wi-Fi can share every cable and switch in the building yet be as isolated as if they were
+separate networks — crossing between them requires a router, where policy can be enforced.
+
+**Spanning Tree (STP)** solves a darker problem: Ethernet frames carry **no TTL**, so two switches
+connected in a loop will circulate a single broadcast frame *forever*, multiplying it until the LAN
+melts — a **broadcast storm**. STP lets switches elect a root, map the topology, and deliberately
+**block** redundant links, turning any physical mesh into a loop-free logical tree. The blocked links
+sit in reserve and activate when an active link fails — redundancy without loops.
+
+<Callout variant="insight" title="Why a TTL-less world needs a tree">
+IP packets carry a TTL (typically starting at 64–128) and die when it runs out; Ethernet frames never expire. That single design difference
+is why routing tolerates loops (they self-heal as packets die) while switching cannot afford even one.
+When someone plugs both ends of a cable into the same switch and the floor's network dies, you're
+watching that difference in action — and watching what STP exists to prevent.
+</Callout>
 
 ## Failure modes & troubleshooting
 
@@ -146,6 +222,17 @@ When a host knows a destination's **IP** but needs its **MAC** to build a frame,
       ],
       answer: 1,
       explanation: "ARP replies are trusted blindly, so an attacker can poison caches and intercept traffic (MITM). Dynamic ARP Inspection mitigates it.",
+    },
+    {
+      q: "Two laptops on opposite sides of an access point collide at the AP without ever hearing each other. This is:",
+      options: [
+        "A broadcast storm",
+        "The hidden terminal problem — solved by CSMA/CA with ACKs and optional RTS/CTS",
+        "A duplex mismatch",
+      ],
+      answer: 1,
+      explanation:
+        "Each laptop is out of the other's radio range but within the AP's — carrier sensing can't see the conflict. 802.11 mitigates with collision avoidance, link-layer ACKs, and RTS/CTS channel reservation.",
     },
   ]}
 />

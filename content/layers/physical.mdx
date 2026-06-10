@@ -28,11 +28,11 @@ and loses count. Line codes solve clock recovery and DC balance:
 | Code | Idea | Trade-off |
 | --- | --- | --- |
 | **NRZ** | Level = bit value | Simple, but no self-clocking on long runs |
-| **NRZI** | *Transition* = 1, no transition = 0 | Robust to polarity inversion |
+| **NRZI** | *Transition* = 1, no transition = 0 | Robust to polarity inversion, but still loses clock on runs of 0s (hence pairing with 4B/5B) |
 | **Manchester** | Mid-bit transition encodes value (used in 10BASE-T) | Self-clocking, but needs 2× bandwidth |
 | **4B/5B + MLT-3** | Map 4 data bits → 5 code bits to guarantee transitions | Used in 100BASE-TX; ~80% efficiency |
-| **8b/10b** | 8 bits → 10 symbols, DC-balanced | Used in Gigabit/PCIe/SATA |
-| **PAM-4** | 4 voltage levels carry 2 bits/symbol | Doubles rate (used in 400G+ Ethernet) |
+| **8b/10b** | 8 bits → 10 symbols, DC-balanced | Used in gigabit fiber (1000BASE-X)/PCIe/SATA |
+| **PAM-4** | 4 voltage levels carry 2 bits/symbol | Doubles rate (used from 50G-per-lane Ethernet up through 400G/800G) |
 
 <SignalWire />
 
@@ -63,6 +63,43 @@ modems plateaued near 33.6 kbps. (56k modems cheated by making the downstream pa
 sidestepping the analog quantization noise.)
 </WorkedExample>
 
+## Modulation: riding a carrier wave
+
+Line codes work on a wire you own outright. To send bits through **radio, fiber bands, or a cable-TV
+plant**, you modulate a **carrier wave** instead, varying its **amplitude** (ASK), **frequency**
+(FSK), or **phase** (PSK). Modern systems combine amplitude *and* phase: **QAM** (quadrature
+amplitude modulation) defines a **constellation** of distinct amplitude-phase points, each encoding
+several bits — 16-QAM carries 4 bits per symbol, 256-QAM carries 8, and Wi-Fi 6's 1024-QAM carries 10.
+
+This is Nyquist's `2B · log₂(M)` made physical: more constellation points (`M`) mean more bits per
+symbol, but the points crowd closer together, so ever-less noise is needed to push one into its
+neighbor. That's why your router silently drops from 1024-QAM to 64-QAM as you walk away from it —
+**adaptive modulation** trades speed for robustness as the SNR falls.
+
+**OFDM** (orthogonal frequency-division multiplexing), the workhorse of Wi-Fi, LTE/5G, and cable,
+splits the channel into hundreds of narrow **subcarriers**, each running its own slow QAM stream.
+Hundreds of slow streams in parallel resist multipath echo and selective interference far better than
+one fast stream — and a damaged frequency band takes out only the few subcarriers sitting in it.
+
+## Multiplexing: many conversations, one medium
+
+Media are expensive; conversations are many. The Physical layer's sharing strategies:
+
+| Scheme | Split by | Where you've met it |
+| --- | --- | --- |
+| **FDM** — frequency division | Each user gets a frequency band, all the time | Radio stations; DSL sharing the phone line with voice |
+| **TDM** — time division | Each user gets the whole channel in rotating time slots | T1/E1 telephone trunks; GSM |
+| **Statistical TDM** | Slots granted on demand rather than fixed rotation | Packet switching itself — the internet's whole premise |
+| **WDM** — wavelength division | Each signal rides its own color of light | Up to ~100 wavelengths per long-haul fiber pair |
+| **CDMA** — code division | All users transmit at once, separated by orthogonal codes | 3G cellular; GPS satellites sharing one frequency |
+
+<Callout variant="insight" title="Statistical multiplexing is the internet's founding bet">
+Fixed FDM/TDM slots waste capacity whenever a user is idle — and data traffic is *bursty*. The
+internet's foundational wager is that statistically multiplexed packets from many bursty senders
+share a link far more efficiently than reserved circuits, at the price of queues, jitter, and the
+occasional drop. Every layer above this one is, in some sense, machinery for managing that bet.
+</Callout>
+
 ## What's actually on the wire: preamble and SFD
 
 Before an Ethernet frame's bits arrive, the Physical layer sends a fixed **preamble** so the receiver
@@ -87,6 +124,28 @@ can lock its clock, followed by a **Start Frame Delimiter** that says "the frame
 Pure Layer-1 devices are "dumb": **repeaters** regenerate a degraded signal, and **hubs** are
 multi-port repeaters that blindly copy bits to every port (one collision domain — which is why they're
 obsolete, replaced by Layer-2 switches).
+
+| Medium | Typical reach | Strengths | Watch out for |
+| --- | --- | --- | --- |
+| Twisted pair (Cat 6a) | 100 m | Cheap, easy to terminate, PoE | Crosstalk, EMI near power runs |
+| Multi-mode fiber | ~550 m | Cheap optics for short hops | Modal dispersion limits distance |
+| Single-mode fiber | tens of km | Enormous bandwidth, EMI-immune | Costlier optics, fragile bend radius |
+| RF (Wi-Fi, 5G) | room → km | No cables at all | Shared medium, interference, eavesdropping |
+
+## Autonegotiation: how both ends agree
+
+Plug in a cable and the two transceivers hold a sub-second conversation — exchanging **link pulses**
+that advertise the speeds and duplex modes each supports — then commit to the best common option.
+That's why a gigabit laptop on an old switch silently runs at 100 Mb/s, and why a damaged pair makes
+a "gigabit" run negotiate *down* rather than fail: 1000BASE-T needs all four twisted pairs, while
+100BASE-TX needs only two.
+
+<Callout variant="warning" title="The classic autonegotiation trap">
+Hard-coding speed/duplex on one end while the other autonegotiates is the canonical self-inflicted
+wound: the autonegotiating side can't hear preferences from a silent partner, falls back to
+**half-duplex**, and the result is a working-but-miserable link riddled with late collisions. If a
+link is mysteriously slow but *up*, check that both ends agree on what they negotiated.
+</Callout>
 
 ## Failure modes & troubleshooting
 
@@ -139,6 +198,17 @@ obsolete, replaced by Layer-2 switches).
       ],
       answer: 1,
       explanation: "A hub is a Layer-1 repeater: it copies bits to all ports, creating one big collision domain. A switch is a Layer-2 device that forwards selectively by MAC address.",
+    },
+    {
+      q: "Why does your Wi-Fi router switch from 1024-QAM to 64-QAM as you move away from it?",
+      options: [
+        "To save battery on the router",
+        "Lower SNR makes dense constellations indistinguishable, so it trades bits/symbol for robustness",
+        "The frequency band changes with distance",
+      ],
+      answer: 1,
+      explanation:
+        "Denser constellations pack points closer together, so they need high SNR to tell apart. As signal weakens, adaptive modulation falls back to sparser constellations — fewer bits per symbol, but decodable.",
     },
   ]}
 />
