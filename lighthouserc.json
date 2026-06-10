@@ -11,7 +11,8 @@
         "http://localhost:9009/layers/transport/",
         "http://localhost:9009/journey/",
         "http://localhost:9009/glossary/",
-        "http://localhost:9009/quiz/"
+        "http://localhost:9009/quiz/",
+        "http://localhost:9009/anatomy/"
       ],
       "numberOfRuns": 1
     },
