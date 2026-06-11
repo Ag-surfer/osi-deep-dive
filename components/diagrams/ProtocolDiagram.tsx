@@ -1738,6 +1738,199 @@ export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "Your AS receives the same prefix three ways — via a customer (LOCAL_PREF 200), a peer (100), and a provider (50); LOCAL_PREF is evaluated before path length, so the customer route wins even if a provider path has fewer hops.",
   },
+
+  // ─── Layer 4 ───
+  "tcp-bytestream": {
+    scene: {
+      width: 820,
+      height: 282,
+      boxes: [
+        { x: 30, y: 84, w: 140, h: 38, title: "write() 100 B", accent: "l4" },
+        { x: 30, y: 130, w: 140, h: 38, title: "write() 100 B", accent: "l4" },
+        { x: 250, y: 104, w: 320, h: 44, title: "‹ 200 bytes · no boundaries ›", mono: true },
+        { x: 650, y: 64, w: 140, h: 32, title: "read() 60 B" },
+        { x: 650, y: 100, w: 140, h: 32, title: "read() 90 B" },
+        { x: 650, y: 136, w: 140, h: 32, title: "read() 50 B" },
+      ],
+      arrows: [
+        { from: [170, 103], to: [250, 120] },
+        { from: [170, 149], to: [250, 130] },
+        { from: [570, 120], to: [650, 80] },
+        { from: [570, 126], to: [650, 116] },
+        { from: [570, 132], to: [650, 152] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "TCP is a byte stream: your bytes and order survive, your boundaries don't",
+          size: 12,
+          weight: 600,
+        },
+        { x: 100, y: 70, text: "sender", size: 10, opacity: 0.6 },
+        { x: 720, y: 52, text: "receiver", size: 10, opacity: 0.6 },
+        {
+          x: 410,
+          y: 246,
+          text: "Two 100-byte writes may be read back as 60 + 90 + 50 bytes — or 200 at once.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 262,
+          text: "So every protocol above TCP frames its own messages (Content-Length, length prefixes).",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "TCP guarantees your bytes and their order, but not your message boundaries: two 100-byte writes can be read back as any split of the 200 bytes. Every protocol above TCP must frame its own messages.",
+    summary:
+      "Two 100-byte writes merge into one 200-byte stream with no boundaries; the receiver may read it back as 60 + 90 + 50 bytes or 200 at once, so applications above TCP must frame their own messages.",
+  },
+
+  "udp-amplification": {
+    scene: {
+      width: 820,
+      height: 288,
+      boxes: [
+        {
+          x: 40,
+          y: 120,
+          w: 160,
+          h: 64,
+          title: "Attacker",
+          lines: ["spoofs victim's IP"],
+          accent: "l1",
+        },
+        { x: 350, y: 44, w: 190, h: 64, title: "Open server", lines: ["DNS / NTP / memcached"] },
+        { x: 640, y: 190, w: 150, h: 64, title: "Victim", lines: ["flooded"], accent: "l1" },
+      ],
+      arrows: [
+        { from: [200, 138], to: [350, 92], label: "small query · src = victim", labelDy: -8 },
+        {
+          from: [500, 108],
+          to: [688, 190],
+          accent: "l1",
+          label: "huge reply — up to 51,200× (memcached)",
+          labelDy: -10,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "UDP reflection/amplification: no handshake, no proof of source",
+          size: 12,
+          weight: 600,
+        },
+        { x: 270, y: 150, text: "~15 B query", size: 9, opacity: 0.6 },
+        { x: 560, y: 168, text: "~750 kB", size: 9, accent: "l1" },
+        {
+          x: 410,
+          y: 258,
+          text: "No handshake → an unverified source. A tiny spoofed query 'from' the victim triggers a far larger reply,",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 274,
+          text: "aimed at the victim. Defense: BCP 38 source filtering + response-size limits (QUIC's Retry verifies this).",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "UDP has no handshake, so a server can't tell a spoofed source from a real one. An attacker sends tiny queries with the victim's address as the source; the server's far-larger replies flood the victim — reflection/amplification DDoS.",
+    summary:
+      "An attacker sends small UDP queries spoofing the victim's source IP to an open DNS/NTP/memcached server, which sends replies up to tens of thousands of times larger to the victim, flooding it.",
+  },
+
+  "quic-migration": {
+    scene: {
+      width: 820,
+      height: 296,
+      boxes: [
+        {
+          x: 40,
+          y: 60,
+          w: 170,
+          h: 58,
+          title: "Phone · Wi-Fi",
+          lines: ["src 10.0.0.5"],
+          accent: "l4",
+        },
+        {
+          x: 40,
+          y: 182,
+          w: 170,
+          h: 58,
+          title: "Phone · cellular",
+          lines: ["src 100.64.0.9"],
+          accent: "l5",
+        },
+        {
+          x: 600,
+          y: 120,
+          w: 180,
+          h: 70,
+          title: "Server",
+          lines: ["matches Connection ID,", "not the IP 4-tuple"],
+          accent: "l3",
+        },
+      ],
+      arrows: [
+        { from: [210, 88], to: [600, 145], accent: "l4", label: "CID a1b2…", labelDy: -8 },
+        {
+          from: [210, 210],
+          to: [600, 168],
+          accent: "l5",
+          label: "CID a1b2… — same connection",
+          labelDy: 16,
+        },
+        {
+          from: [125, 118],
+          to: [125, 182],
+          both: true,
+          dashed: true,
+          accent: "l1",
+          label: "move",
+          labelDx: -26,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "QUIC connection migration: named by Connection ID, not the 4-tuple",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 410,
+          y: 262,
+          text: "When the phone's IP changes (Wi-Fi → cellular) the Connection ID stays the same, so the connection",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 278,
+          text: "continues after a quick path validation — TCP, pinned to the 4-tuple, would drop and reconnect.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "A QUIC connection is identified by a Connection ID rather than the IP/port 4-tuple, so when a phone moves from Wi-Fi to cellular and its address changes, the same connection continues after a path-validation check — where TCP would break and reconnect.",
+    summary:
+      "A phone with an active QUIC connection (Connection ID a1b2) moves from Wi-Fi (one source IP) to cellular (another); because the server matches the Connection ID, not the 4-tuple, the connection survives the address change.",
+  },
 };
 
 /** Render the diagram registered for a protocol slug. */

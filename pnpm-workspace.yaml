@@ -24,3 +24,4 @@ minimumReleaseAgeExclude:
 allowBuilds:
   unrs-resolver: true # native resolver required by eslint-config-next's import resolution
   sharp: false # unused — images.unoptimized: true + static export, so never invoked
+  esbuild: false # transitive (via vitest); ships a prebuilt platform binary as the @esbuild/* optional dep, so its postinstall is unneeded
