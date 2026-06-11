@@ -1216,6 +1216,203 @@ export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "Left: classic OFDM where each time slot is owned entirely by one station (A, then B, then C). Right: OFDMA splitting each slot into frequency resource units so stations A–E transmit at the same time.",
   },
+
+  // ─── Layer 2 ───
+  "ethernet-switching-learning": {
+    scene: {
+      width: 820,
+      height: 300,
+      boxes: [
+        { x: 30, y: 128, w: 120, h: 48, title: "Host A", lines: ["port 1"], accent: "l2" },
+        { x: 320, y: 112, w: 160, h: 80, title: "switch" },
+        { x: 670, y: 44, w: 120, h: 48, title: "Host B", lines: ["unknown"] },
+        { x: 670, y: 128, w: 120, h: 48, title: "Host C", lines: ["port 3"] },
+        { x: 670, y: 212, w: 120, h: 48, title: "Host D", lines: ["port 4"] },
+      ],
+      regions: [{ x: 300, y: 214, w: 200, h: 58, label: "CAM table", accent: "l2" }],
+      arrows: [
+        { from: [150, 150], to: [320, 150], accent: "l2", label: "A→B", labelDy: -8 },
+        { from: [480, 140], to: [670, 68], dashed: true, label: "flood", labelDy: -6 },
+        { from: [480, 152], to: [670, 152], dashed: true, label: "flood", labelDy: -6 },
+        { from: [480, 164], to: [670, 236], dashed: true, label: "flood", labelDy: 14 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "The learning switch: flood the unknown, learn from the reply",
+          size: 12,
+          weight: 600,
+        },
+        { x: 400, y: 240, text: "A → port 1   (learned)", size: 10, mono: true, opacity: 0.8 },
+        { x: 400, y: 256, text: "B → ?   (unknown → flood)", size: 10, mono: true, opacity: 0.8 },
+        {
+          x: 410,
+          y: 290,
+          text: "every frame teaches source MAC → ingress port; B's reply makes the next A→B frame a unicast, not a flood.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "A learning switch floods a frame for an unknown destination out every other port, while recording the source MAC against its ingress port; the destination's reply then teaches the switch its port, so later frames are unicast.",
+    summary:
+      "Host A sends to an unknown Host B; the switch floods the frame to ports 2, 3, and 4 and records A on port 1 in its CAM table. B's reply will teach the switch B's port, ending the flooding.",
+  },
+
+  "arp-spoofing": {
+    scene: {
+      width: 820,
+      height: 322,
+      boxes: [
+        {
+          x: 40,
+          y: 110,
+          w: 150,
+          h: 64,
+          title: "Victim",
+          lines: ["gw .1 → atk MAC ✗"],
+          accent: "l1",
+        },
+        { x: 630, y: 110, w: 150, h: 64, title: "Gateway", lines: ["192.168.1.1"] },
+        {
+          x: 330,
+          y: 212,
+          w: 170,
+          h: 66,
+          title: "Attacker",
+          lines: ["forged ARP replies"],
+          accent: "l1",
+        },
+      ],
+      arrows: [
+        {
+          from: [360, 212],
+          to: [190, 168],
+          accent: "l1",
+          dashed: true,
+          label: "ARP reply: '.1 is at my MAC'",
+          labelDy: -10,
+        },
+        {
+          from: [180, 174],
+          to: [340, 224],
+          accent: "l1",
+          label: "all traffic for .1",
+          labelDy: 16,
+        },
+        { from: [500, 224], to: [640, 174], accent: "l1", label: "relayed (MITM)", labelDy: 16 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "ARP spoofing: forge the reply, become the man in the middle",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 410,
+          y: 100,
+          text: "(normally the victim talks to the gateway directly)",
+          size: 10,
+          opacity: 0.5,
+        },
+        {
+          x: 410,
+          y: 298,
+          text: "ARP replies are believed unconditionally — claim the gateway's IP is at your MAC,",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 314,
+          text: "and every victim routes through you. Defense: Dynamic ARP Inspection + TLS above.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "ARP has no authentication, so an attacker can send forged replies mapping the gateway's IP to its own MAC; the victim's cache is poisoned and its traffic flows through the attacker, who relays it on — a classic on-path MITM (the full attack poisons the gateway's cache too).",
+    summary:
+      "An attacker sends the victim a forged ARP reply claiming the gateway's IP is at the attacker's MAC; the victim then sends all gateway-bound traffic to the attacker, who relays it to the real gateway, sitting in the middle.",
+  },
+
+  "stp-storm": {
+    scene: {
+      width: 820,
+      height: 312,
+      boxes: [
+        { x: 355, y: 46, w: 120, h: 52, title: "Switch 1", lines: ["root bridge"], accent: "l2" },
+        { x: 150, y: 196, w: 120, h: 52, title: "Switch 2" },
+        { x: 560, y: 196, w: 120, h: 52, title: "Switch 3" },
+      ],
+      arrows: [
+        {
+          from: [360, 98],
+          to: [255, 196],
+          both: true,
+          accent: "l3",
+          label: "forwarding",
+          labelDx: -16,
+        },
+        {
+          from: [470, 98],
+          to: [575, 196],
+          both: true,
+          accent: "l3",
+          label: "forwarding",
+          labelDx: 16,
+        },
+        {
+          from: [270, 226],
+          to: [560, 226],
+          both: true,
+          dashed: true,
+          accent: "l1",
+          label: "✗ BLOCKED by STP",
+          labelDy: -8,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "Spanning Tree breaks the loop before it storms",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 415,
+          y: 248,
+          text: "alive but blocked — unblocks if a forwarding link fails",
+          size: 10,
+          opacity: 0.6,
+        },
+        {
+          x: 410,
+          y: 280,
+          text: "Leave all three links up and one broadcast circulates forever — re-flooded to every host each lap —",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 296,
+          text: "until links saturate and MAC tables flap. STP blocks one link → exactly one path, loop-free.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Three switches wired in a loop would circulate a broadcast forever — re-flooded to every host each lap until links saturate — because Ethernet frames have no TTL to kill them. Spanning Tree keeps one redundant link blocked so the active topology is always a loop-free tree, unblocking it only when a link fails.",
+    summary:
+      "Three switches in a triangle: two links forward traffic and the third is blocked by STP, leaving exactly one path. Without the block, a broadcast would circulate endlessly, re-flooded to every host each lap, saturating the LAN.",
+  },
 };
 
 /** Render the diagram registered for a protocol slug. */

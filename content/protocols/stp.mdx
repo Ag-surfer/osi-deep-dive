@@ -36,6 +36,8 @@ three steps — each decided by "lowest wins":
 Result: exactly one active path between any two points. A link dies → BPDUs stop → blocked ports
 near the failure transition to forwarding, restoring connectivity over the redundant path.
 
+<ProtocolDiagram id="stp-storm" />
+
 <Callout variant="warning" title="Classic STP's painful price">
 802.1D ports crawl through listening → learning → forwarding over **30–50 seconds** — an eternity
 during which a newly-connected server gets nothing (and DHCP times out). **RSTP (802.1w)** is the
