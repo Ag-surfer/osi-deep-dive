@@ -1931,6 +1931,220 @@ export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "A phone with an active QUIC connection (Connection ID a1b2) moves from Wi-Fi (one source IP) to cellular (another); because the server matches the Connection ID, not the 4-tuple, the connection survives the address change.",
   },
+
+  // ─── Layer 5 ───
+  "websocket-vs-polling": {
+    scene: {
+      width: 820,
+      height: 332,
+      regions: [
+        {
+          x: 40,
+          y: 58,
+          w: 740,
+          h: 70,
+          label: "Polling — client re-asks every few seconds",
+          accent: "l1",
+        },
+        {
+          x: 40,
+          y: 140,
+          w: 740,
+          h: 70,
+          label: "Long-polling — server holds the request until news",
+          accent: "l2",
+        },
+        {
+          x: 40,
+          y: 222,
+          w: 740,
+          h: 70,
+          label: "WebSocket — one upgrade, then a permanent two-way pipe",
+          accent: "l3",
+        },
+      ],
+      arrows: [
+        { from: [170, 96], to: [660, 96], label: "any news?" },
+        {
+          from: [660, 112],
+          to: [170, 112],
+          dashed: true,
+          accent: "l1",
+          label: "'no' · 'no' · 'yes' — mostly wasted",
+        },
+        { from: [170, 178], to: [660, 178], label: "any news? (held open)" },
+        {
+          from: [660, 194],
+          to: [170, 194],
+          dashed: true,
+          accent: "l2",
+          label: "→ reply when news, then re-ask",
+        },
+        {
+          from: [170, 258],
+          to: [660, 258],
+          both: true,
+          accent: "l3",
+          label: "101 Switching → frames both ways, any time",
+        },
+      ],
+      notes: [
+        { x: 410, y: 28, text: "Why WebSocket: escaping request/response", size: 12, weight: 600 },
+        { x: 150, y: 50, text: "client", size: 9, anchor: "start", opacity: 0.55 },
+        { x: 680, y: 50, text: "server", size: 9, anchor: "end", opacity: 0.55 },
+        {
+          x: 410,
+          y: 312,
+          text: "Polling wastes requests (mostly 'nothing yet'); long-polling holds one request per message;",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 328,
+          text: "WebSocket keeps one full-duplex channel, so the server pushes the instant news happens.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Before WebSocket, the web faked server push with polling (re-ask on a timer, mostly wasted) or long-polling (hold a request open until news). WebSocket replaces both with one persistent full-duplex channel where the server pushes the instant something happens.",
+    summary:
+      "Three rows: polling repeatedly asks and usually hears 'nothing yet'; long-polling holds each request open until there's news; WebSocket upgrades once to a permanent two-way channel so the server can push at any time.",
+  },
+
+  "ssh-layers": {
+    scene: {
+      width: 820,
+      height: 322,
+      boxes: [
+        { x: 150, y: 56, w: 130, h: 34, title: "shell", accent: "l3" },
+        { x: 345, y: 56, w: 130, h: 34, title: "sftp", accent: "l3" },
+        { x: 540, y: 56, w: 130, h: 34, title: "-L / -R / -D", accent: "l3" },
+        {
+          x: 150,
+          y: 104,
+          w: 520,
+          h: 52,
+          title: "③ Connection (RFC 4254)",
+          lines: ["multiplexes the pipe into channels"],
+          accent: "l3",
+        },
+        {
+          x: 150,
+          y: 166,
+          w: 520,
+          h: 52,
+          title: "② User auth (RFC 4252)",
+          lines: ["public-key challenge/response — no secret on the wire"],
+          accent: "l5",
+        },
+        {
+          x: 150,
+          y: 228,
+          w: 520,
+          h: 52,
+          title: "① Transport (RFC 4253)",
+          lines: ["key exchange + host-key check → encrypted pipe / TCP 22"],
+          accent: "l4",
+        },
+      ],
+      arrows: [
+        { from: [300, 104], to: [215, 90] },
+        { from: [410, 104], to: [410, 90] },
+        { from: [520, 104], to: [605, 90] },
+      ],
+      notes: [
+        { x: 410, y: 26, text: "SSH: three protocols in a trenchcoat", size: 12, weight: 600 },
+        { x: 100, y: 74, text: "channels:", size: 9, anchor: "end", opacity: 0.6 },
+        {
+          x: 410,
+          y: 300,
+          text: "One TCP connection becomes an encrypted pipe (transport), then proves who you are (auth),",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 316,
+          text: "then multiplexes into channels — shells, file transfer, port forwards — each independent.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "RFC 4251 splits SSH into three protocols stacked on TCP: the transport layer builds an encrypted pipe (key exchange + host-key check), user authentication proves the client by public key, and the connection layer multiplexes that pipe into independent channels — shells, file transfer, port forwards.",
+    summary:
+      "A three-layer stack over TCP: transport (key exchange and host-key authentication → encrypted pipe), user authentication (public-key challenge/response), and connection (multiplexes the pipe into channels such as shells, sftp, and port forwards).",
+  },
+
+  "sip-signaling-media": {
+    scene: {
+      width: 820,
+      height: 290,
+      boxes: [
+        { x: 40, y: 140, w: 140, h: 64, title: "Alice", lines: ["softphone"], accent: "l5" },
+        { x: 640, y: 140, w: 140, h: 64, title: "Bob", lines: ["softphone"], accent: "l5" },
+        { x: 330, y: 44, w: 170, h: 56, title: "SIP proxy / registrar", accent: "l3" },
+      ],
+      arrows: [
+        {
+          from: [180, 150],
+          to: [330, 84],
+          dashed: true,
+          accent: "l3",
+          label: "INVITE / 200 / ACK",
+          labelDy: -8,
+        },
+        {
+          from: [500, 84],
+          to: [640, 150],
+          dashed: true,
+          accent: "l3",
+          label: "(signaling)",
+          labelDy: -8,
+        },
+        {
+          from: [180, 190],
+          to: [640, 190],
+          both: true,
+          accent: "l1",
+          label: "RTP media — direct, peer-to-peer",
+          labelDy: 16,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "SIP signals the call; RTP carries it — two different paths",
+          size: 12,
+          weight: 600,
+        },
+        { x: 410, y: 118, text: "control path — through servers", size: 9, opacity: 0.55 },
+        {
+          x: 410,
+          y: 252,
+          text: "SIP messages may traverse several servers to set up the call; the audio (RTP) usually flows directly between endpoints.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 268,
+          text: "'Call connects but no audio' = signaling worked, the media path didn't — classically a NAT problem (STUN/TURN/ICE).",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "SIP only signals — it finds the parties and negotiates the session — while the actual audio/video rides RTP on a separate, usually direct, path between the endpoints. That split is why a call can connect (signaling worked) yet have no audio (the RTP path failed, classically at NAT).",
+    summary:
+      "Alice and Bob exchange SIP signaling (INVITE/200/ACK) through a SIP proxy, but the RTP media flows directly between them on a different path; a connected call with no audio means signaling succeeded while the media path failed.",
+  },
 };
 
 /** Render the diagram registered for a protocol slug. */

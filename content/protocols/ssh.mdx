@@ -1,5 +1,6 @@
 export const sources = [
   { label: "RFC 4251 — SSH Protocol Architecture", href: "https://www.rfc-editor.org/rfc/rfc4251.html" },
+  { label: "RFC 4253 — SSH Transport Layer Protocol", href: "https://www.rfc-editor.org/rfc/rfc4253.html" },
   { label: "RFC 4252 — SSH Authentication Protocol", href: "https://www.rfc-editor.org/rfc/rfc4252.html" },
   { label: "RFC 4254 — SSH Connection Protocol", href: "https://www.rfc-editor.org/rfc/rfc4254.html" },
 ];
@@ -26,6 +27,8 @@ RFC 4251 splits SSH into layers — a useful interview answer in itself:
 3. **Connection layer** (RFC 4254): multiplexes the pipe into **channels** — your shell is one,
    each forwarded port is another, an `sftp` subsystem a third — with per-channel flow control.
    One TCP connection, many logical sessions (the trick `ControlMaster` connection reuse exploits).
+
+<ProtocolDiagram id="ssh-layers" />
 
 <Callout variant="warning" title="The TOFU problem">
 That first-connection prompt — *"authenticity of host … can't be established, fingerprint is
