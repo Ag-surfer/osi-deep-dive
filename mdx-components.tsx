@@ -19,6 +19,7 @@ import { SessionLifecycle } from "@/components/diagrams/anim/SessionLifecycle";
 import { EncryptionTransform } from "@/components/diagrams/anim/EncryptionTransform";
 import { HttpRoundTrip } from "@/components/diagrams/anim/HttpRoundTrip";
 import { ProtocolDiagram } from "@/components/diagrams/ProtocolDiagram";
+import { LayerDiagram } from "@/components/diagrams/LayerDiagram";
 
 // Required at the project root for @next/mdx with the App Router. We register
 // the custom content components here so every layer's MDX can use them directly
@@ -47,5 +48,6 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     EncryptionTransform,
     HttpRoundTrip,
     ProtocolDiagram,
+    LayerDiagram,
   };
 }

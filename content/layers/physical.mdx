@@ -36,6 +36,8 @@ and loses count. Line codes solve clock recovery and DC balance:
 
 <SignalWire />
 
+<LayerDiagram id="physical-line-coding" />
+
 <Callout variant="note" title="Self-clocking is the whole point">
 There is no separate clock wire on Ethernet. The receiver extracts timing **from the data signal
 itself** — which is why guaranteeing frequent transitions (Manchester, 4B/5B, 8b/10b) matters so much.
@@ -76,6 +78,8 @@ symbol, but the points crowd closer together, so ever-less noise is needed to pu
 neighbor. That's why your router silently drops from 1024-QAM to 64-QAM as you walk away from it —
 **adaptive modulation** trades speed for robustness as the SNR falls.
 
+<LayerDiagram id="physical-qam" />
+
 **OFDM** (orthogonal frequency-division multiplexing), the workhorse of Wi-Fi, LTE/5G, and cable,
 splits the channel into hundreds of narrow **subcarriers**, each running its own slow QAM stream.
 Hundreds of slow streams in parallel resist multipath echo and selective interference far better than
@@ -94,6 +98,8 @@ Media are expensive; conversations are many. The Physical layer's sharing strate
 | **Statistical TDM** | Slots granted on demand rather than fixed rotation | Packet switching itself — the internet's whole premise |
 | **WDM** — wavelength division | Each signal rides its own color of light | Up to ~100 wavelengths per long-haul fiber pair |
 | **CDMA** — code division | All users transmit at once, separated by orthogonal codes | 3G cellular; GPS satellites sharing one frequency |
+
+<LayerDiagram id="physical-multiplexing" />
 
 <Callout variant="insight" title="Statistical multiplexing is the internet's founding bet">
 Fixed FDM/TDM slots waste capacity whenever a user is idle — and data traffic is *bursty*. The
