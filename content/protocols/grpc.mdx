@@ -37,7 +37,7 @@ the property that makes gRPC viable at microservice scale.
 
 ## Four call types — the real reason to choose gRPC
 
-HTTP/2's bidirectional streams let gRPC offer call shapes plain request/response can't:
+HTTP/2's bidirectional streams let gRPC offer call shapes beyond plain request/response:
 
 | Type | Shape | Use |
 | --- | --- | --- |
@@ -47,8 +47,11 @@ HTTP/2's bidirectional streams let gRPC offer call shapes plain request/response
 | **Bidirectional** | both stream independently | chat, real-time sync, interactive sessions |
 
 Each call is its own HTTP/2 stream, so many concurrent calls **multiplex over one connection**
-without head-of-line blocking between them — and metadata, deadlines, and cancellation propagate
-as part of the call.
+without _application-level_ head-of-line blocking between them (a single lost TCP segment still
+stalls every stream — the transport-level HOL that QUIC/HTTP-3 removes) — and metadata, deadlines,
+and cancellation propagate as part of the call.
+
+<ProtocolDiagram id="grpc-streaming" />
 
 <Callout variant="insight" title="Deadlines and cancellation: the distributed-systems part">
 gRPC bakes in two things hand-rolled REST usually forgets. A **deadline** travels *with* the call

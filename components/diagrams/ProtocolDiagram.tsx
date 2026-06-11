@@ -2145,6 +2145,218 @@ export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "Alice and Bob exchange SIP signaling (INVITE/200/ACK) through a SIP proxy, but the RTP media flows directly between them on a different path; a connected call with no audio means signaling succeeded while the media path failed.",
   },
+
+  "grpc-streaming": {
+    scene: {
+      width: 820,
+      height: 314,
+      boxes: [
+        { x: 120, y: 64, w: 90, h: 200, title: "client" },
+        { x: 610, y: 64, w: 90, h: 200, title: "server" },
+      ],
+      arrows: [
+        { from: [210, 86], to: [610, 86], label: "request" },
+        { from: [610, 100], to: [210, 100], dashed: true, label: "response" },
+        { from: [210, 140], to: [610, 140], label: "request" },
+        {
+          from: [610, 154],
+          to: [210, 154],
+          dashed: true,
+          accent: "l4",
+          label: "response stream ⇐⇐⇐",
+        },
+        { from: [210, 194], to: [610, 194], accent: "l5", label: "request stream ⇒⇒⇒" },
+        { from: [610, 208], to: [210, 208], dashed: true, label: "response" },
+        { from: [210, 242], to: [610, 242], accent: "l6", label: "requests ⇄" },
+        {
+          from: [610, 256],
+          to: [210, 256],
+          dashed: true,
+          accent: "l6",
+          label: "responses ⇄ (independent)",
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "gRPC's four call shapes — each its own HTTP/2 stream",
+          size: 12,
+          weight: 600,
+        },
+        { x: 715, y: 96, text: "Unary", size: 9, anchor: "start", opacity: 0.7 },
+        { x: 715, y: 150, text: "Server▶", size: 9, anchor: "start", opacity: 0.7, accent: "l4" },
+        { x: 715, y: 204, text: "Client▶", size: 9, anchor: "start", opacity: 0.7, accent: "l5" },
+        { x: 715, y: 252, text: "Bidi", size: 9, anchor: "start", opacity: 0.7, accent: "l6" },
+        {
+          x: 410,
+          y: 290,
+          text: "Unary · server-streaming · client-streaming · bidirectional — HTTP/2 streams make all four possible,",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 306,
+          text: "multiplexed over one connection (no HTTP-level head-of-line blocking; one TCP loss stalls all).",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "HTTP/2's bidirectional streams give gRPC four call shapes — ordinary unary (1→1), plus three that plain request/response can't: server streaming (1→N), client streaming (N→1), and bidirectional (N↔N) — each its own stream, multiplexed over one HTTP/2 connection.",
+    summary:
+      "Four gRPC call shapes between a client and server: unary (one request, one response), server streaming (one request, many responses), client streaming (many requests, one response), and bidirectional (both stream independently).",
+  },
+
+  // ─── Layer 6 ───
+  "tls-chain": {
+    scene: {
+      width: 820,
+      height: 288,
+      boxes: [
+        {
+          x: 40,
+          y: 110,
+          w: 210,
+          h: 72,
+          title: "Leaf cert",
+          lines: ["CN = example.com"],
+          accent: "l6",
+        },
+        {
+          x: 305,
+          y: 110,
+          w: 210,
+          h: 72,
+          title: "Intermediate CA",
+          lines: ["signs the leaf"],
+          accent: "l6",
+        },
+        {
+          x: 570,
+          y: 110,
+          w: 210,
+          h: 72,
+          title: "Root CA",
+          lines: ["in your trust store ✓"],
+          accent: "l3",
+        },
+      ],
+      arrows: [
+        { from: [250, 146], to: [305, 146], label: "signed by", labelDy: -8 },
+        { from: [515, 146], to: [570, 146], label: "signed by", labelDy: -8 },
+      ],
+      brackets: [
+        {
+          x: 40,
+          w: 475,
+          y: 192,
+          label: "the server must send these (leaf + intermediates)",
+          accent: "l6",
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "TLS chain of trust: leaf → intermediate → root",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 675,
+          y: 196,
+          text: "pre-trusted — needn't be sent",
+          size: 9,
+          opacity: 0.6,
+          accent: "l3",
+        },
+        {
+          x: 410,
+          y: 250,
+          text: "Validation walks each signature from the leaf up to a root your system already trusts.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 266,
+          text: "Forget the intermediate — browsers fetch or preload it and cope, but curl can't: the incomplete-chain bug.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "A TLS certificate is validated by walking a chain of signatures from the server's leaf certificate through one or more intermediate CAs up to a root CA already in your trust store. The server must send the leaf plus intermediates; the root is pre-installed, so it needn't be sent.",
+    summary:
+      "A chain of trust: the leaf certificate (example.com) is signed by an intermediate CA, which is signed by a root CA already in the device's trust store; the server sends the leaf and intermediates, and the root is pre-trusted.",
+  },
+
+  "compression-lz77": {
+    scene: {
+      width: 820,
+      height: 248,
+      boxes: [
+        { x: 60, y: 92, w: 340, h: 48, title: "the quick brown fox … lazy dog ", mono: true },
+        {
+          x: 480,
+          y: 92,
+          w: 260,
+          h: 48,
+          title: "⟨ distance 44, length 10 ⟩",
+          mono: true,
+          accent: "l6",
+        },
+      ],
+      arrows: [
+        {
+          from: [560, 148],
+          to: [180, 148],
+          accent: "l6",
+          label: "copy 'the quick ' — 10 bytes, 44 back",
+          labelDy: 16,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "LZ77: replace a repeat with a back-reference into recent output",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 230,
+          y: 80,
+          text: "already-emitted output (the sliding window)",
+          size: 9,
+          opacity: 0.6,
+        },
+        { x: 610, y: 80, text: "the repeat, encoded", size: 9, opacity: 0.6, accent: "l6" },
+        {
+          x: 410,
+          y: 212,
+          text: "A repeated run becomes a ⟨distance, length⟩ pointer, not literal bytes — and HTML, JSON, and code",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 228,
+          text: "are saturated with repeats. Huffman then codes what's left; together that's DEFLATE (gzip, PNG, ZIP).",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "LZ77 compresses by replacing a repeated run of bytes with a back-reference — a ⟨distance, length⟩ pointer into the recently-emitted output (the sliding window) — instead of re-sending the literal bytes. Huffman coding the result yields DEFLATE.",
+    summary:
+      "An LZ77 back-reference: a repeated string 'the quick ' is encoded as a pointer ⟨distance 44, length 10⟩ into earlier output rather than literal bytes; Huffman coding what remains produces DEFLATE.",
+  },
 };
 
 /** Render the diagram registered for a protocol slug. */

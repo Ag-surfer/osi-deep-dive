@@ -69,6 +69,8 @@ mis-issuance is detectable — Chrome requires it), short-lived certs and **ACME
 (automation killed the "expired cert" outage and the excuse not to encrypt), and **OCSP
 stapling** (the server proves its cert isn't revoked, sparing a privacy-leaking call to the CA).
 
+<ProtocolDiagram id="tls-chain" />
+
 <Callout variant="warning" title="The failures you'll actually meet">
 Expired certificate (automate renewal — ACME). Hostname mismatch (cert for `www` but not apex, or
 vice versa). Incomplete chain — the server forgot to send intermediates, so it works in browsers
@@ -97,12 +99,12 @@ reach for.
       q: "A site loads in Chrome but fails in curl with a verification error. Most likely cause?",
       options: [
         "Chrome ignores certificate errors",
-        "The server isn't sending intermediate certs; browsers cache them, curl doesn't — an incomplete chain",
+        "The server isn't sending intermediate certs; browsers fetch or preload them, curl doesn't — an incomplete chain",
         "curl doesn't support TLS 1.3",
       ],
       answer: 1,
       explanation:
-        "A common misconfiguration: the server presents only its leaf cert. Browsers often have intermediates cached from other sites and paper over it; a fresh client like curl can't build the chain.",
+        "A common misconfiguration: the server presents only its leaf cert. Browsers paper over it — Chrome fetches the missing intermediate via the cert's AIA URL, Firefox preloads known intermediates — while a fresh client like curl does neither and can't build the chain.",
     },
   ]}
 />

@@ -31,6 +31,8 @@ JSON repeats key names, English repeats `the`. **LZ77** (1977) replaces a repeat
 back-reference: *"copy 14 bytes from 312 bytes ago."* The "dictionary" is simply the recent
 output — a sliding window over what you've already seen. Long repeats collapse to a few bytes.
 
+<ProtocolDiagram id="compression-lz77" />
+
 ## DEFLATE = LZ77 + Huffman, and it's everywhere
 
 <Callout variant="insight" title="The combination that won">
