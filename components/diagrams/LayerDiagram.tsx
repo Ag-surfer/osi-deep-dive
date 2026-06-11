@@ -474,6 +474,492 @@ export const LAYER_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "TCP's send window is the minimum of two values: rwnd (flow control, protecting the receiver's buffer) and cwnd (congestion control, protecting the network).",
   },
+
+  // ───────── Session (Layer 5) ─────────
+  "session-socket-lifecycle": {
+    scene: {
+      width: 820,
+      height: 412,
+      boxes: [
+        {
+          x: 70,
+          y: 66,
+          w: 200,
+          h: 46,
+          title: "socket()",
+          lines: ["allocate an endpoint"],
+          mono: true,
+        },
+        {
+          x: 520,
+          y: 66,
+          w: 200,
+          h: 46,
+          title: "socket()",
+          lines: ["allocate an endpoint"],
+          mono: true,
+        },
+        {
+          x: 70,
+          y: 130,
+          w: 200,
+          h: 46,
+          title: "bind() + listen()",
+          lines: ["declare willingness"],
+          mono: true,
+        },
+        {
+          x: 70,
+          y: 194,
+          w: 200,
+          h: 46,
+          title: "accept()",
+          lines: ["block for a client"],
+          mono: true,
+          accent: "l5",
+        },
+        {
+          x: 520,
+          y: 194,
+          w: 200,
+          h: 46,
+          title: "connect()",
+          lines: ["initiate the dialogue"],
+          mono: true,
+          accent: "l5",
+        },
+        { x: 70, y: 258, w: 200, h: 46, title: "send() / recv()", lines: ["converse"], mono: true },
+        {
+          x: 520,
+          y: 258,
+          w: 200,
+          h: 46,
+          title: "send() / recv()",
+          lines: ["converse"],
+          mono: true,
+        },
+        {
+          x: 70,
+          y: 322,
+          w: 200,
+          h: 46,
+          title: "shutdown() → close()",
+          lines: ["half-close, release"],
+          mono: true,
+        },
+        {
+          x: 520,
+          y: 322,
+          w: 200,
+          h: 46,
+          title: "shutdown() → close()",
+          lines: ["half-close, release"],
+          mono: true,
+        },
+      ],
+      arrows: [
+        {
+          from: [520, 217],
+          to: [270, 217],
+          both: true,
+          dashed: true,
+          accent: "l5",
+          label: "establish — drives TCP's 3-way handshake",
+          labelDy: -10,
+        },
+        { from: [520, 281], to: [270, 281], both: true, label: "send()/recv()", labelDy: -10 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "Berkeley sockets: a session lifecycle, named call by call",
+          size: 12,
+          weight: 600,
+        },
+        { x: 170, y: 54, text: "server", size: 12, weight: 600, accent: "l5" },
+        { x: 620, y: 54, text: "client", size: 12, weight: 600, accent: "l5" },
+        { x: 620, y: 158, text: "(waits)", size: 10, opacity: 0.5 },
+        {
+          x: 410,
+          y: 388,
+          text: "connect()/accept() establish the dialogue; send()/recv() converse the bytes.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 404,
+          text: "shutdown(WR) half-closes one direction; close() releases — Layer 5's job list, frozen into an API.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "The Berkeley sockets call sequence is a session lifecycle: socket() allocates an endpoint, connect()/accept() establish the dialogue (driving TCP's handshake), send()/recv() converse, and shutdown()/close() release it.",
+    summary:
+      "Two columns, server and client, of the socket calls: both socket(); the server adds bind()/listen()/accept() while the client calls connect(); the two meet to establish the connection, then both send()/recv() and finally shutdown()/close().",
+  },
+
+  "session-load-balancer": {
+    scene: {
+      width: 820,
+      height: 326,
+      boxes: [
+        { x: 24, y: 128, w: 130, h: 54, title: "Browser", lines: ["one user"] },
+        {
+          x: 250,
+          y: 120,
+          w: 150,
+          h: 70,
+          title: "load balancer",
+          lines: ["round-robin"],
+          accent: "l5",
+        },
+        {
+          x: 560,
+          y: 44,
+          w: 210,
+          h: 56,
+          title: "Server 1",
+          lines: ["session: alice ✓"],
+          accent: "l3",
+        },
+        { x: 560, y: 128, w: 210, h: 56, title: "Server 2", lines: ["no session ✗"], accent: "l1" },
+        { x: 560, y: 212, w: 210, h: 56, title: "Server 3", lines: ["no session ✗"] },
+      ],
+      arrows: [
+        { from: [154, 155], to: [250, 155], label: "requests" },
+        {
+          from: [400, 140],
+          to: [560, 72],
+          accent: "l3",
+          label: "req 1 → creates session",
+          labelDy: -8,
+        },
+        {
+          from: [400, 168],
+          to: [560, 156],
+          accent: "l1",
+          dashed: true,
+          label: "req 2 → different box",
+          labelDy: 16,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "the load-balancer test: why scaling 1 → 3 servers logs users out",
+          size: 12,
+          weight: 600,
+        },
+        { x: 665, y: 198, text: "→ logged out!", size: 10, accent: "l1" },
+        {
+          x: 410,
+          y: 296,
+          text: "the session lived in one server's RAM; the load balancer sent the next request elsewhere.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 312,
+          text: "fixes: sticky sessions · a shared session store (Redis) · signed tokens (JWT) the client carries.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Session state in one server's memory breaks the moment a load balancer routes the next request to a different server — the user appears logged out. Sticky sessions, a shared store, or signed tokens fix it.",
+    summary:
+      "A browser's requests go through a round-robin load balancer to three servers; the login session is created on Server 1, but the next request lands on Server 2, which has no session, logging the user out.",
+  },
+
+  // ───────── Presentation (Layer 6) ─────────
+  "presentation-utf8": {
+    scene: {
+      width: 820,
+      height: 258,
+      boxes: [
+        {
+          x: 190,
+          y: 102,
+          w: 200,
+          h: 66,
+          title: "1100 0011",
+          lines: ["= 0xC3"],
+          mono: true,
+          accent: "l6",
+        },
+        {
+          x: 440,
+          y: 102,
+          w: 200,
+          h: 66,
+          title: "1010 1001",
+          lines: ["= 0xA9"],
+          mono: true,
+          accent: "l6",
+        },
+      ],
+      notes: [
+        { x: 410, y: 30, text: "UTF-8 encodes 'é' (U+00E9) in two bytes", size: 12, weight: 600 },
+        {
+          x: 410,
+          y: 64,
+          text: "U+00E9 = 233 → 11 payload bits: 00011 101001",
+          size: 12,
+          mono: true,
+        },
+        { x: 290, y: 94, text: "lead byte (110…)", size: 10, opacity: 0.7 },
+        { x: 540, y: 94, text: "continuation (10…)", size: 10, opacity: 0.7 },
+        {
+          x: 410,
+          y: 202,
+          text: "the 110 / 10 marker bits frame the payload 00011·101001 — the original 11 code-point bits.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 234,
+          text: "send 0xC3 0xA9. Read those bytes as Latin-1 instead of UTF-8 and 'é' becomes 'Ã©' — mojibake.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "UTF-8 packs the 11-bit code point U+00E9 into a two-byte frame: a 110-prefixed lead byte and a 10-prefixed continuation byte, yielding 0xC3 0xA9.",
+    summary:
+      "The Unicode code point U+00E9 (233, the letter é) encoded in UTF-8 as the two bytes 0xC3 and 0xA9, with 110 and 10 marker bits framing the eleven payload bits 00011 101001.",
+  },
+
+  "presentation-endianness": {
+    scene: {
+      width: 820,
+      height: 296,
+      boxes: [
+        { x: 236, y: 84, w: 84, h: 46, title: "0D", mono: true, accent: "l6" },
+        { x: 324, y: 84, w: 84, h: 46, title: "0C", mono: true, accent: "l6" },
+        { x: 412, y: 84, w: 84, h: 46, title: "0B", mono: true, accent: "l6" },
+        { x: 500, y: 84, w: 84, h: 46, title: "0A", mono: true, accent: "l6" },
+        { x: 236, y: 200, w: 84, h: 46, title: "0A", mono: true, accent: "l6" },
+        { x: 324, y: 200, w: 84, h: 46, title: "0B", mono: true, accent: "l6" },
+        { x: 412, y: 200, w: 84, h: 46, title: "0C", mono: true, accent: "l6" },
+        { x: 500, y: 200, w: 84, h: 46, title: "0D", mono: true, accent: "l6" },
+      ],
+      arrows: [
+        {
+          from: [624, 130],
+          to: [624, 200],
+          both: true,
+          dashed: true,
+          accent: "l6",
+          label: "htonl() / ntohl()",
+          labelDx: 34,
+        },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 30,
+          text: "One 32-bit value 0x0A0B0C0D — two byte orders",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 410,
+          y: 70,
+          text: "little-endian (x86/ARM RAM): least-significant byte at the lowest address",
+          size: 11,
+          opacity: 0.85,
+        },
+        { x: 278, y: 152, text: "addr 0 (low)", size: 9, opacity: 0.6 },
+        { x: 542, y: 152, text: "addr 3 (high)", size: 9, opacity: 0.6 },
+        {
+          x: 410,
+          y: 186,
+          text: "big-endian = network byte order (RFC 791): most-significant byte first",
+          size: 11,
+          opacity: 0.85,
+        },
+        {
+          x: 410,
+          y: 278,
+          text: "skip the swap and port 80 (0x0050) reads as 20480 (0x5000) — the bug every network coder writes once.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "The same 32-bit value sits as 0D 0C 0B 0A in little-endian memory but must travel most-significant-byte-first as 0A 0B 0C 0D — network byte order. htonl()/ntohl() own the swap.",
+    summary:
+      "The number 0x0A0B0C0D stored little-endian in x86 memory as the bytes 0D 0C 0B 0A, versus big-endian network byte order 0A 0B 0C 0D; htonl converts host order to network order.",
+  },
+
+  // ───────── Application (Layer 7) ─────────
+  "application-page-load-rtts": {
+    scene: {
+      width: 820,
+      height: 312,
+      boxes: [
+        { x: 120, y: 86, w: 150, h: 50, title: "DNS", lines: ["~1 RTT"], accent: "l7" },
+        { x: 278, y: 86, w: 150, h: 50, title: "TCP", lines: ["1 RTT — handshake"], accent: "l4" },
+        { x: 436, y: 86, w: 150, h: 50, title: "TLS 1.3", lines: ["1 RTT"], accent: "l6" },
+        { x: 594, y: 86, w: 150, h: 50, title: "HTTP", lines: ["1 RTT → 1st byte"], accent: "l7" },
+        {
+          x: 120,
+          y: 222,
+          w: 300,
+          h: 50,
+          title: "QUIC = transport + TLS",
+          lines: ["1 RTT, combined"],
+          accent: "l4",
+        },
+        {
+          x: 430,
+          y: 222,
+          w: 220,
+          h: 50,
+          title: "0-RTT resume",
+          lines: ["data on first flight"],
+          accent: "l3",
+        },
+      ],
+      brackets: [
+        {
+          x: 120,
+          w: 624,
+          y: 150,
+          label: "≈ 4 RTTs ≈ 400 ms on a 100 ms-RTT link — all latency",
+          accent: "l1",
+        },
+        { x: 120, w: 300, y: 286, label: "1 RTT (0 on resume)", accent: "l3" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "First-byte latency: ~4 round trips of setup before content arrives",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 120,
+          y: 78,
+          text: "cold load (nothing cached):",
+          size: 10,
+          opacity: 0.7,
+          anchor: "start",
+        },
+        {
+          x: 120,
+          y: 214,
+          text: "HTTP/3 folds it together:",
+          size: 10,
+          opacity: 0.7,
+          anchor: "start",
+        },
+      ],
+    },
+    caption:
+      "A cold HTTPS load pays a round trip at each layer — DNS, TCP, TLS, then HTTP — so first-byte time is ~4 RTTs of pure latency. HTTP/3 over QUIC folds transport and TLS into one (zero on resume).",
+    summary:
+      "Loading a page cold costs four sequential round trips — DNS, TCP handshake, TLS handshake, then the HTTP request — about 400 ms on a 100 ms link; QUIC combines transport and TLS setup into a single round trip.",
+  },
+
+  "application-http-hol": {
+    scene: {
+      width: 820,
+      height: 318,
+      regions: [
+        {
+          x: 40,
+          y: 52,
+          w: 740,
+          h: 64,
+          label: "HTTP/1.1 — responses return in strict order",
+          accent: "l7",
+        },
+        {
+          x: 40,
+          y: 130,
+          w: 740,
+          h: 64,
+          label: "HTTP/2 — streams multiplexed on one TCP byte stream",
+          accent: "l4",
+        },
+        {
+          x: 40,
+          y: 208,
+          w: 740,
+          h: 64,
+          label: "HTTP/3 / QUIC — independent streams",
+          accent: "l3",
+        },
+      ],
+      boxes: [
+        { x: 110, y: 78, w: 110, h: 30, title: "① slow", mono: true, accent: "l1" },
+        { x: 250, y: 78, w: 110, h: 30, title: "② waits", mono: true },
+        { x: 390, y: 78, w: 110, h: 30, title: "③ waits", mono: true },
+        { x: 110, y: 156, w: 110, h: 30, title: "stream A", mono: true },
+        { x: 250, y: 156, w: 110, h: 30, title: "stream B", mono: true },
+        { x: 390, y: 156, w: 110, h: 30, title: "stream C", mono: true },
+        { x: 110, y: 234, w: 110, h: 30, title: "A ✗ waits", mono: true, accent: "l1" },
+        { x: 250, y: 234, w: 110, h: 30, title: "B ✓", mono: true, accent: "l3" },
+        { x: 390, y: 234, w: 110, h: 30, title: "C ✓", mono: true, accent: "l3" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "Head-of-line blocking: the thread from HTTP/1.1 → /2 → /3",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 540,
+          y: 97,
+          text: "B, C blocked behind slow A",
+          size: 10,
+          opacity: 0.7,
+          anchor: "start",
+        },
+        {
+          x: 540,
+          y: 175,
+          text: "✗ a lost segment stalls all 3",
+          size: 10,
+          accent: "l1",
+          anchor: "start",
+        },
+        {
+          x: 540,
+          y: 253,
+          text: "loss in A; B and C still arrive",
+          size: 10,
+          accent: "l3",
+          anchor: "start",
+        },
+        {
+          x: 410,
+          y: 300,
+          text: "Same GET / 200 OK semantics throughout — each fix exposed the next bottleneck, until QUIC made one stream's bad luck private.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "The head-of-line story in three rows: HTTP/1.1 blocks at the application (ordered responses), HTTP/2 multiplexes streams but still blocks at the transport (one lost TCP segment stalls all), and HTTP/3's QUIC streams are independent — one loss blocks only its own stream.",
+    summary:
+      "Three rows comparing head-of-line blocking: HTTP/1.1 forces responses in order so a slow one blocks the rest; HTTP/2 shares one TCP stream so a lost segment stalls all streams; HTTP/3 over QUIC keeps streams independent so loss in one does not block the others.",
+  },
 };
 
 /** Render the diagram registered for a layer-subtopic id. */

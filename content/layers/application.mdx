@@ -68,6 +68,8 @@ blocking: TCP guarantees one ordered byte stream, so a single lost segment halts
 it. HTTP/3 moves to QUIC, whose independent streams finally make one resource's bad luck private.
 Same `GET`/`200 OK` semantics for thirty years; everything underneath rebuilt twice.
 
+<LayerDiagram id="application-http-hol" />
+
 ## DNS: the lookup behind every connection
 
 Before your browser can open a TCP connection, it must turn `example.com` into an IP address. DNS does
@@ -102,6 +104,8 @@ regardless of how fast the pipe is. **HTTP/3 + QUIC** fold transport and TLS set
 resumption can skip the handshake entirely), cutting this dramatically — a direct payoff of
 understanding what each layer adds.
 </WorkedExample>
+
+<LayerDiagram id="application-page-load-rtts" />
 
 ## Email: one message, three protocols
 

@@ -98,6 +98,8 @@ a session lifecycle, named step by step:
 | `shutdown(WR)` | end *my half* gracefully — half-close, dialog control |
 | `close()` | release the session |
 
+<LayerDiagram id="session-socket-lifecycle" />
+
 The OSI Session layer never shipped as a protocol, but its vocabulary shipped as this API — which is
 why Tanenbaum teaches sockets in the transport chapter while OSI purists call the same ideas
 "session management." Higher up the same shape repeats: **gRPC** wraps HTTP/2 streams into typed
@@ -117,6 +119,8 @@ load balancer sends each request to a random server. Every fix — sticky sessio
 store, signed tokens — is an answer to the Session layer's core question: who remembers the
 conversation?
 </Callout>
+
+<LayerDiagram id="session-load-balancer" />
 
 ## Failure modes & troubleshooting
 
