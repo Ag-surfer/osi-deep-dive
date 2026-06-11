@@ -46,10 +46,13 @@ Three knobs raise the bitrate, each bounded by [Nyquist and Shannon](/layers/phy
 2. 1000BASE-T needed 10× that on the same Cat 5e. Rather than one impossibly fast pair, it spreads
    250 Mb/s across **4** pairs simultaneously — and transmits in *both directions on each pair at
    once* (hybrid + echo cancellation), a DSP feat.
-3. So if a re-termination breaks one pair, gigabit can't form — autonegotiation falls back to
-   100BASE-TX, which only needs two good pairs. The classic "why did this link come up at 100?"
-   ticket is a dead pair, and it's a direct consequence of the lane math.
+3. So if a re-termination breaks one pair, gigabit can't form — the PHY **downshifts** to
+   100BASE-TX, which only needs two good pairs (some gear instead just fails to link). The classic
+   "why did this link come up at 100?" ticket is a dead pair, and it's a direct consequence of the
+   lane math.
 </WorkedExample>
+
+<ProtocolDiagram id="ethernet-phy-lanes" />
 
 ## The features that ship with the PHY
 

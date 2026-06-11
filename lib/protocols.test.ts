@@ -48,17 +48,28 @@ describe("PROTOCOLS registry integrity", () => {
   });
 
   it("has a hand-drawn diagram for every protocol, each embedded in its page", () => {
-    const diagramSlugs = Object.keys(PROTOCOL_DIAGRAMS).sort();
-    const registrySlugs = PROTOCOLS.map((p) => p.slug).sort();
-    expect(diagramSlugs).toEqual(registrySlugs);
-
+    const registrySlugs = PROTOCOLS.map((p) => p.slug);
+    // Every protocol has its primary (slug-keyed) diagram, embedded in its page.
     const dir = join(process.cwd(), "content", "protocols");
     for (const p of PROTOCOLS) {
+      expect(PROTOCOL_DIAGRAMS[p.slug], `${p.slug} primary diagram`).toBeDefined();
       const src = readFileSync(join(dir, `${p.slug}.mdx`), "utf8");
       expect(src, `${p.slug}.mdx embeds its diagram`).toContain(
         `<ProtocolDiagram id="${p.slug}" />`,
       );
     }
+
+    // Supplementary diagrams may add extra keys (e.g. "tcp-handshake"); every
+    // <ProtocolDiagram id="…"/> embedded in any page — primary or extra — must
+    // resolve, since a typo would silently render nothing.
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".mdx"))) {
+      const src = readFileSync(join(dir, f), "utf8");
+      for (const m of src.matchAll(/<ProtocolDiagram\s+id="([^"]+)"\s*\/>/g)) {
+        expect(PROTOCOL_DIAGRAMS[m[1]!], `${f} embeds unknown id "${m[1]}"`).toBeDefined();
+      }
+    }
+    // Sanity: extras never replace a primary — the registry is a superset.
+    for (const s of registrySlugs) expect(PROTOCOL_DIAGRAMS[s]).toBeDefined();
   });
 
   it("every diagram has a non-empty caption and screen-reader summary", () => {

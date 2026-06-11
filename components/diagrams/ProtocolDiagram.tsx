@@ -1023,6 +1023,199 @@ export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "A client submits mail via SMTP on port 587 to its MTA, which relays via SMTP port 25 (using a DNS MX lookup) to the recipient's MTA; the recipient retrieves it via IMAP on port 993.",
   },
+
+  // ═══════════ Supplementary per-subtopic diagrams ═══════════
+  // Extra keys (slug + "-topic") embedded as a second <ProtocolDiagram/> on a
+  // page. The coverage test allows these alongside the one-per-slug primaries.
+
+  // ─── Layer 1 ───
+  "ethernet-phy-lanes": {
+    scene: {
+      width: 820,
+      height: 286,
+      boxes: [
+        { x: 30, y: 88, w: 120, h: 146, title: "NIC", lines: ["1000BASE-T"], accent: "l1" },
+        { x: 180, y: 92, w: 460, h: 30, title: "pair 1  ·  250 Mb/s  ↔", mono: true },
+        { x: 180, y: 128, w: 460, h: 30, title: "pair 2  ·  250 Mb/s  ↔", mono: true },
+        { x: 180, y: 164, w: 460, h: 30, title: "pair 3  ·  250 Mb/s  ↔", mono: true },
+        { x: 180, y: 200, w: 460, h: 30, title: "pair 4  ·  ✗ broken", mono: true, accent: "l1" },
+        { x: 670, y: 88, w: 120, h: 146, title: "switch" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 30,
+          text: "1000BASE-T: a gigabit spread over four copper pairs, each bidirectional",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 410,
+          y: 58,
+          text: "100BASE-TX used 2 pairs; gigabit needs all 4 (PAM-5 + echo cancellation)",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 258,
+          text: "4 × 250 = 1000 Mb/s — most modern speed jumps are really lane-count jumps.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 274,
+          text: "Lose a pair and it drops to 100BASE-TX (needs only 2) — the 'why did it come up at 100?' ticket.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "1000BASE-T reaches a gigabit by running all four twisted pairs at 250 Mb/s each, bidirectionally (PAM-5 + echo cancellation). Lose one pair and gigabit can't form — the link falls back to 2-pair 100BASE-TX.",
+    summary:
+      "A NIC and a switch joined by four twisted pairs, each carrying 250 Mb/s bidirectionally to total 1 Gb/s; one broken pair forces a fallback to 100BASE-TX, which needs only two pairs.",
+  },
+
+  "fiber-modes": {
+    scene: {
+      width: 820,
+      height: 300,
+      regions: [
+        { x: 170, y: 70, w: 430, h: 64, accent: "l1" },
+        { x: 170, y: 206, w: 430, h: 40, accent: "l4" },
+      ],
+      polylines: [
+        {
+          points: [
+            [170, 102],
+            [600, 102],
+          ],
+        },
+        {
+          accent: "l1",
+          points: [
+            [170, 102],
+            [242, 78],
+            [314, 126],
+            [386, 78],
+            [458, 126],
+            [530, 78],
+            [600, 102],
+          ],
+        },
+        {
+          accent: "l4",
+          points: [
+            [170, 226],
+            [600, 226],
+          ],
+        },
+      ],
+      boxes: [
+        { x: 132, y: 90, w: 14, h: 24, accent: "l3" },
+        { x: 606, y: 82, w: 46, h: 40, accent: "l1" },
+        { x: 132, y: 214, w: 14, h: 24, accent: "l3" },
+        { x: 606, y: 214, w: 14, h: 24, accent: "l3" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 30,
+          text: "Why single-mode goes the distance: modal dispersion",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 180,
+          y: 60,
+          text: "multi-mode core (~50 µm) — light takes many paths",
+          size: 10,
+          anchor: "start",
+          opacity: 0.7,
+        },
+        {
+          x: 180,
+          y: 198,
+          text: "single-mode core (~9 µm) — one path",
+          size: 10,
+          anchor: "start",
+          opacity: 0.7,
+        },
+        { x: 629, y: 74, text: "smeared", size: 9, opacity: 0.65, accent: "l1" },
+        { x: 613, y: 208, text: "sharp", size: 9, opacity: 0.65, accent: "l4" },
+        {
+          x: 410,
+          y: 272,
+          text: "multi-mode: many ray paths → many arrival times → the pulse smears, limiting reach to ~hundreds of m.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 288,
+          text: "single-mode: one path, one arrival time → the pulse stays crisp over tens of km.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Multi-mode fiber's wide core lets light take many paths that arrive at different times, smearing the pulse (modal dispersion) and capping reach; single-mode's narrow core admits one path, keeping pulses sharp over long distances.",
+    summary:
+      "Two fibers: a wide multi-mode core in which several ray paths arrive at different times and smear the output pulse, versus a narrow single-mode core with one straight path that keeps the pulse sharp.",
+  },
+
+  "wifi-ofdma": {
+    scene: {
+      width: 820,
+      height: 300,
+      boxes: [
+        { x: 70, y: 92, w: 88, h: 140, title: "STA A", accent: "l5" },
+        { x: 162, y: 92, w: 88, h: 140, title: "STA B", accent: "l6" },
+        { x: 254, y: 92, w: 88, h: 140, title: "STA C", accent: "l3" },
+        { x: 470, y: 92, w: 130, h: 35, title: "STA A", accent: "l5" },
+        { x: 470, y: 127, w: 130, h: 35, title: "STA B", accent: "l6" },
+        { x: 470, y: 162, w: 130, h: 35, title: "STA C", accent: "l3" },
+        { x: 470, y: 197, w: 130, h: 35, title: "STA D", accent: "l7" },
+        { x: 602, y: 92, w: 128, h: 70, title: "STA A", accent: "l5" },
+        { x: 602, y: 162, w: 128, h: 70, title: "STA E", accent: "l2" },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "OFDMA: from one-station-at-a-time to many-at-once",
+          size: 12,
+          weight: 600,
+        },
+        { x: 206, y: 78, text: "classic OFDM: one station per slot", size: 10, opacity: 0.75 },
+        { x: 600, y: 78, text: "Wi-Fi 6 OFDMA: resource units, at once", size: 10, opacity: 0.75 },
+        { x: 46, y: 164, text: "freq", size: 9, anchor: "end", opacity: 0.55 },
+        { x: 206, y: 248, text: "time →", size: 9, opacity: 0.55 },
+        { x: 600, y: 248, text: "time →", size: 9, opacity: 0.55 },
+        {
+          x: 410,
+          y: 272,
+          text: "classic: a small IoT packet wastes an entire slot. OFDMA subdivides each slot into resource units,",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 288,
+          text: "packing many clients into one airtime — a shift from pure contention toward AP scheduling.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Classic Wi-Fi gives one station the whole channel for its turn; Wi-Fi 6's OFDMA subdivides each time slot into resource units assigned to several clients simultaneously — moving from pure contention toward AP scheduling.",
+    summary:
+      "Left: classic OFDM where each time slot is owned entirely by one station (A, then B, then C). Right: OFDMA splitting each slot into frequency resource units so stations A–E transmit at the same time.",
+  },
 };
 
 /** Render the diagram registered for a protocol slug. */
