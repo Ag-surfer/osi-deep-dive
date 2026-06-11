@@ -1413,6 +1413,186 @@ export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "Three switches in a triangle: two links forward traffic and the third is blocked by STP, leaving exactly one path. Without the block, a broadcast would circulate endlessly, re-flooded to every host each lap, saturating the LAN.",
   },
+
+  // ─── Layer 2 / 3 ───
+  "vlan-trunk": {
+    scene: {
+      width: 820,
+      height: 300,
+      boxes: [
+        { x: 30, y: 70, w: 110, h: 44, title: "Host A", lines: ["VLAN 10"], accent: "l3" },
+        { x: 30, y: 180, w: 110, h: 44, title: "Host B", lines: ["VLAN 20"], accent: "l6" },
+        { x: 230, y: 110, w: 120, h: 80, title: "Switch 1" },
+        { x: 470, y: 110, w: 120, h: 80, title: "Switch 2" },
+        { x: 680, y: 70, w: 110, h: 44, title: "Host C", lines: ["VLAN 10"], accent: "l3" },
+        { x: 680, y: 180, w: 110, h: 44, title: "Host D", lines: ["VLAN 20"], accent: "l6" },
+      ],
+      arrows: [
+        { from: [140, 92], to: [230, 130], label: "untagged", labelDy: -8 },
+        { from: [140, 202], to: [230, 170], label: "untagged", labelDy: 14 },
+        {
+          from: [350, 150],
+          to: [470, 150],
+          both: true,
+          accent: "l2",
+          label: "TRUNK — tagged [10],[20]",
+          labelDy: -8,
+        },
+        { from: [590, 130], to: [680, 92], label: "untagged", labelDy: -8 },
+        { from: [590, 170], to: [680, 202], label: "untagged", labelDy: 14 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "Access ports vs trunk: the VLAN tag lives only between switches",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 410,
+          y: 270,
+          text: "Access ports are untagged — your laptop never sees a VLAN. The switch tags on ingress,",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 286,
+          text: "the trunk backhauls many VLANs (tags intact), and the far switch strips the tag on egress.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Hosts attach to untagged access ports, each in one VLAN; the switch adds the 802.1Q tag on ingress and the trunk between switches carries every VLAN with tags intact, while the far switch strips the tag back off on egress to the host.",
+    summary:
+      "Hosts A and C in VLAN 10 and B and D in VLAN 20 connect to two switches via untagged access ports; the inter-switch trunk carries both VLANs tagged, and each switch tags on ingress and strips on egress.",
+  },
+
+  "ipv6-slaac": {
+    scene: {
+      width: 820,
+      height: 322,
+      boxes: [
+        {
+          x: 40,
+          y: 110,
+          w: 150,
+          h: 70,
+          title: "Router",
+          lines: ["RA: prefix +", "I'm the gateway"],
+          accent: "l3",
+        },
+        { x: 620, y: 110, w: 160, h: 70, title: "Host", lines: ["no address yet"], accent: "l5" },
+      ],
+      regions: [
+        { x: 250, y: 210, w: 320, h: 56, label: "③ address = prefix + interface ID", accent: "l5" },
+      ],
+      arrows: [
+        {
+          from: [190, 134],
+          to: [620, 134],
+          accent: "l3",
+          label: "① Router Advertisement: prefix 2001:db8:1::/64",
+          labelDy: -8,
+        },
+        {
+          from: [620, 162],
+          to: [190, 162],
+          dashed: true,
+          label: "② DAD: 'anyone using …:9f60?' (silence = mine)",
+          labelDy: 16,
+        },
+      ],
+      notes: [
+        { x: 410, y: 28, text: "SLAAC: how IPv6 self-configures, no DHCP", size: 12, weight: 600 },
+        {
+          x: 410,
+          y: 240,
+          text: "2001:db8:1::/64   +   8f2c:3a1d:b4e5:9f60 (random IID)",
+          size: 11,
+          mono: true,
+          opacity: 0.85,
+        },
+        {
+          x: 410,
+          y: 290,
+          text: "the router advertises a /64 prefix; the host appends a random 64-bit interface ID, then DAD-checks it.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 306,
+          text: "NDP (ICMPv6) replaces ARP, and SLAAC the need for DHCP — filter ICMPv6 and IPv6 breaks.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "Stateless address autoconfiguration: a router advertises the link's /64 prefix, the host appends a (random) 64-bit interface identifier, and Duplicate Address Detection confirms uniqueness — all over ICMPv6 Neighbor Discovery, which replaces ARP and removes the need for DHCP.",
+    summary:
+      "A router sends a Router Advertisement carrying the prefix 2001:db8:1::/64; the host forms its address by appending a random 64-bit interface ID and runs Duplicate Address Detection to confirm no one else uses it.",
+  },
+
+  "icmp-traceroute": {
+    scene: {
+      width: 820,
+      height: 318,
+      boxes: [
+        { x: 20, y: 64, w: 100, h: 50, title: "you", lines: ["traceroute"], accent: "l3" },
+        { x: 190, y: 66, w: 90, h: 46, title: "R1" },
+        { x: 360, y: 66, w: 90, h: 46, title: "R2" },
+        { x: 530, y: 66, w: 90, h: 46, title: "R3" },
+        { x: 690, y: 64, w: 100, h: 50, title: "dest" },
+      ],
+      arrows: [
+        { from: [70, 148], to: [235, 148], accent: "l1", label: "TTL=1 → 0", labelDy: -8 },
+        { from: [70, 188], to: [405, 188], accent: "l2", label: "TTL=2 → 0", labelDy: -8 },
+        { from: [70, 228], to: [575, 228], accent: "l4", label: "TTL=3 → 0", labelDy: -8 },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "traceroute: TTL = 1, 2, 3 … makes each hop introduce itself",
+          size: 12,
+          weight: 600,
+        },
+        { x: 240, y: 164, text: "⏱ Time Exceeded ← R1", size: 9, anchor: "start", accent: "l1" },
+        { x: 410, y: 204, text: "⏱ Time Exceeded ← R2", size: 9, anchor: "start", accent: "l2" },
+        {
+          x: 580,
+          y: 244,
+          text: "⏱ ← R3 (then dest answers)",
+          size: 9,
+          anchor: "start",
+          accent: "l4",
+        },
+        {
+          x: 410,
+          y: 288,
+          text: "each probe's TTL expires one hop further along; that router returns ICMP Time Exceeded, naming itself.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 304,
+          text: "The loop-prevention field (TTL) turned into a network-mapping tool.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "traceroute sends probes with TTL = 1, 2, 3 …; each router that decrements the TTL to zero drops the probe and returns an ICMP Time Exceeded, so successive probes reveal the path one hop at a time.",
+    summary:
+      "A chain from you through routers R1, R2, R3 to the destination; a probe with TTL=1 expires at R1, TTL=2 at R2, and TTL=3 at R3, each expiring router returning an ICMP Time Exceeded that reveals its address.",
+  },
 };
 
 /** Render the diagram registered for a protocol slug. */

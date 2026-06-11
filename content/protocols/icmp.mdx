@@ -47,6 +47,8 @@ serious router.
 3/code 4 (or ICMPv6 Packet Too Big) with the supported MTU. The sender caches the path MTU and
 sizes segments accordingly.
 
+<ProtocolDiagram id="icmp-traceroute" />
+
 <WorkedExample title="Anatomy of the PMTUD black hole">
 A VPN reduces a path's MTU to 1400. A server behind a firewall that drops all inbound ICMP sends
 1500-byte segments with DF set.

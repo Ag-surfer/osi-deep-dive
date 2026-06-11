@@ -66,6 +66,8 @@ ICMPv6 message types doing the link's housekeeping over efficient multicast:
 Flags in the RA select the regime: pure SLAAC, SLAAC + DHCPv6 for extras like DNS (the **O** flag),
 or managed DHCPv6 (**M**) where the enterprise wants leases and logs.
 
+<ProtocolDiagram id="ipv6-slaac" />
+
 <Callout variant="warning" title="Dual-stack reality">
 The transition mechanism that won is the boring one: **dual stack** — run both protocols, prefer
 IPv6 (per *Happy Eyeballs*, RFC 8305: race connections on both, use whichever answers first, so
