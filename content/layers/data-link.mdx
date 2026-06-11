@@ -24,6 +24,8 @@ byte are special: the **I/G bit** (individual vs. group/multicast) and the **U/L
 locally administered). The all-ones address `ff:ff:ff:ff:ff:ff` is the **broadcast** — every NIC on the
 segment accepts it.
 
+<LayerDiagram id="datalink-mac" />
+
 <Callout variant="insight" title="MAC is flat; IP is hierarchical">
 A MAC address says *who* a NIC is, not *where* it is — there's no structure to aggregate or route on.
 That's why it only works within one link/broadcast domain, and why the Network layer's hierarchical IP
@@ -88,6 +90,8 @@ breaks down. Picture laptops A and C on opposite sides of access point B, each i
 of each other. A senses the air, hears silence, and transmits — while C, equally convinced the
 channel is free, does the same. Their frames collide *at B*, and neither sender ever knows. A and C
 are **hidden terminals** to each other.
+
+<LayerDiagram id="datalink-hidden-terminal" />
 
 802.11's answers stack up: **CSMA/CA** waits a random backoff *before* transmitting (avoidance, since
 detection is impossible); every unicast frame gets a **link-layer ACK**, so a collision is at least

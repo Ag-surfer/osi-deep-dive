@@ -103,6 +103,8 @@ Two different problems, often confused:
   avoidance** (linear growth), halving on loss (**AIMD** — additive increase, multiplicative decrease).
   **Fast retransmit/recovery** reacts to three duplicate ACKs without waiting for a timeout.
 
+<LayerDiagram id="transport-flow-congestion" />
+
 <SlidingWindow />
 
 <WorkedExample title="Window needed to fill a fast, long link">
@@ -120,6 +122,8 @@ scaling: a tiny window throttles throughput regardless of available bandwidth.
 ### Beyond Reno: how congestion control evolved
 
 The slow-start/AIMD scheme above is classic **Reno** — and the internet has moved on twice:
+
+<LayerDiagram id="transport-congestion" />
 
 - **CUBIC** (RFC 9438, the Linux default since 2006) replaces AIMD's linear growth with a cubic
   curve: after a loss it recovers quickly toward the previous plateau, probes gently *near* it, then

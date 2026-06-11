@@ -67,6 +67,8 @@ You need four isolated subnets from a single `/24` (256 addresses).
 The pattern generalizes: borrow `n` host bits to make `2ⁿ` subnets, each of size `2^(32−prefix)`.
 </WorkedExample>
 
+<LayerDiagram id="network-subnetting" />
+
 ## Routing vs. forwarding
 
 These two words are often conflated; the distinction is fundamental.
@@ -188,6 +190,8 @@ public IPv4 address multiplex an entire network, which is why this form is calle
 address translation), and why NAT is best described as a Layer 3 function with its hand in Layer 4's
 pocket.
 </WorkedExample>
+
+<LayerDiagram id="network-nat" />
 
 <Callout variant="warning" title="What NAT breaks">
 NAT only creates mappings for connections initiated **from inside** — unsolicited inbound connections
