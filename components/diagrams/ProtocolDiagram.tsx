@@ -1593,6 +1593,151 @@ export const PROTOCOL_DIAGRAMS: Record<string, Diagram> = {
     summary:
       "A chain from you through routers R1, R2, R3 to the destination; a probe with TTL=1 expires at R1, TTL=2 at R2, and TTL=3 at R3, each expiring router returning an ICMP Time Exceeded that reveals its address.",
   },
+
+  // ─── Layer 3 routing ───
+  "ospf-areas": {
+    scene: {
+      width: 820,
+      height: 308,
+      regions: [
+        {
+          x: 280,
+          y: 50,
+          w: 260,
+          h: 64,
+          label: "Area 0 (backbone) — all inter-area traffic transits here",
+          accent: "l3",
+        },
+        { x: 40, y: 170, w: 210, h: 80, label: "Area 1", accent: "l4" },
+        { x: 305, y: 170, w: 210, h: 80, label: "Area 2", accent: "l5" },
+        { x: 570, y: 170, w: 210, h: 80, label: "Area 3 — link flaps", accent: "l1" },
+      ],
+      boxes: [
+        { x: 110, y: 124, w: 70, h: 38, title: "ABR", accent: "l4" },
+        { x: 375, y: 124, w: 70, h: 38, title: "ABR", accent: "l5" },
+        { x: 640, y: 124, w: 70, h: 38, title: "ABR", accent: "l1" },
+        { x: 632, y: 200, w: 96, h: 40, title: "R ✗ flap", accent: "l1" },
+      ],
+      arrows: [
+        { from: [330, 114], to: [160, 124] },
+        { from: [410, 114], to: [410, 124] },
+        { from: [490, 114], to: [665, 124] },
+        { from: [145, 162], to: [145, 172] },
+        { from: [410, 162], to: [410, 172] },
+        { from: [675, 162], to: [675, 172] },
+      ],
+      notes: [
+        {
+          x: 410,
+          y: 28,
+          text: "OSPF areas: hierarchy contains the blast radius",
+          size: 12,
+          weight: 600,
+        },
+        {
+          x: 410,
+          y: 276,
+          text: "Each router has the full map of its own area and runs Dijkstra; ABRs summarize areas into the backbone.",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 292,
+          text: "A flap in Area 3 re-runs full Dijkstra only in Area 3; other areas just get a cheap summary update.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "OSPF splits a network into areas joined by a backbone (area 0); routers see the full topology only within their own area, so a flapping link's full SPF (Dijkstra) recomputation stays inside its area — other areas at most reprocess a summary LSA, a cheap partial update rather than a full re-run.",
+    summary:
+      "A backbone Area 0 with three leaf areas (1, 2, 3) attached through area border routers; a link flap in Area 3 triggers a full Dijkstra recomputation only within Area 3, while other areas merely reprocess an updated summary LSA.",
+  },
+
+  "bgp-policy": {
+    scene: {
+      width: 820,
+      height: 322,
+      boxes: [
+        {
+          x: 40,
+          y: 120,
+          w: 150,
+          h: 70,
+          title: "your AS",
+          lines: ["best-path choice"],
+          accent: "l3",
+        },
+        {
+          x: 600,
+          y: 44,
+          w: 180,
+          h: 56,
+          title: "via Customer",
+          lines: ["LOCAL_PREF 200"],
+          accent: "l3",
+        },
+        {
+          x: 600,
+          y: 132,
+          w: 180,
+          h: 56,
+          title: "via Peer",
+          lines: ["LOCAL_PREF 100"],
+          accent: "l5",
+        },
+        {
+          x: 600,
+          y: 220,
+          w: 180,
+          h: 56,
+          title: "via Provider",
+          lines: ["LOCAL_PREF 50"],
+          accent: "l1",
+        },
+      ],
+      arrows: [
+        {
+          from: [600, 72],
+          to: [190, 142],
+          accent: "l3",
+          label: "① prefer (they pay)",
+          labelDy: -6,
+        },
+        {
+          from: [600, 160],
+          to: [190, 158],
+          accent: "l5",
+          label: "② then peers (free)",
+          labelDy: -6,
+        },
+        { from: [600, 248], to: [190, 176], accent: "l1", label: "③ last (you pay)", labelDy: 14 },
+      ],
+      notes: [
+        { x: 410, y: 28, text: "BGP best-path: money first, hops later", size: 12, weight: 600 },
+        {
+          x: 410,
+          y: 294,
+          text: "All three reach the same prefix. LOCAL_PREF is checked before AS_PATH length, so your AS prefers",
+          size: 11,
+          opacity: 0.8,
+        },
+        {
+          x: 410,
+          y: 310,
+          text: "the customer route (revenue), then peers (free), then providers (cost) — even if a provider path is shorter.",
+          size: 11,
+          opacity: 0.8,
+        },
+      ],
+    },
+    caption:
+      "BGP's best-path selection checks the operator's LOCAL_PREF before AS_PATH length, so an AS prefers routes learned from paying customers, then settlement-free peers, then providers it pays — revenue and cost outrank hop count.",
+    summary:
+      "Your AS receives the same prefix three ways — via a customer (LOCAL_PREF 200), a peer (100), and a provider (50); LOCAL_PREF is evaluated before path length, so the customer route wins even if a provider path has fewer hops.",
+  },
 };
 
 /** Render the diagram registered for a protocol slug. */
